@@ -132,6 +132,9 @@ app.post("/api/report", (req, res) => {
   wsSyncSubscriptions();
 
   saveStore();
+  // Push the fresh snapshot straight out to every open dashboard rather than
+  // making them wait for their next poll.
+  sseBroadcast("state", store);
   res.json({ ok: true });
 });
 
@@ -193,6 +196,7 @@ function fromFinnhubSymbol(fhSym) {
 const quotes = {}; // key -> {price, change, changePct, prevClose, dayHigh, dayLow, t, live, spark: number[]}
 const priceHistory = {}; // key -> [{t, price}], rolling -- powers the small inline sparklines only
 const MAX_HISTORY_POINTS = 900;
+let quotesDirty = false; // set on every tick; drained by the SSE push loop below
 function recordAndSetQuote(key, q, opts = {}) {
   quotes[key] = { ...quotes[key], ...q, t: new Date().toISOString(), live: !!opts.live };
   if (typeof q.price === "number") {
@@ -201,6 +205,7 @@ function recordAndSetQuote(key, q, opts = {}) {
     if (arr.length > MAX_HISTORY_POINTS) arr.splice(0, arr.length - MAX_HISTORY_POINTS);
     quotes[key].spark = arr.slice(-60).map(p => p.price);
   }
+  quotesDirty = true;
 }
 
 let lastQuoteError = null;
@@ -306,6 +311,57 @@ app.get("/api/quotes", (req, res) => res.json({
   quotes, at: new Date().toISOString(),
   wsConnected: !!(ws && ws.readyState === WebSocket.OPEN),
 }));
+
+// ---- Server-Sent Events: push, don't poll -------------------------------
+// The browser used to poll /api/state and /api/quotes on a timer, which puts
+// a floor under how stale the numbers can be. This streams instead: a new
+// bot report or a new Finnhub tick is written to every open browser the
+// moment it lands, so position P&L moves as fast as the data actually
+// arrives rather than as fast as a setInterval fires.
+const sseClients = new Set();
+
+function sseSend(client, event, data) {
+  try { client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); }
+  catch { sseClients.delete(client); }
+}
+function sseBroadcast(event, data) {
+  for (const c of Array.from(sseClients)) sseSend(c, event, data);
+}
+function quotesPayload() {
+  return { quotes, at: new Date().toISOString(), wsConnected: !!(ws && ws.readyState === WebSocket.OPEN) };
+}
+
+app.get("/api/stream", (req, res) => {
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no", // stop any proxy from buffering the stream
+  });
+  res.flushHeaders();
+  res.write("retry: 3000\n\n");
+
+  const client = { res };
+  sseClients.add(client);
+  // Prime the new connection so it renders immediately instead of waiting
+  // for the next report/tick.
+  sseSend(client, "state", store);
+  sseSend(client, "quotes", quotesPayload());
+
+  const hb = setInterval(() => {
+    try { res.write(": hb\n\n"); } catch { /* closed */ }
+  }, 25_000);
+
+  req.on("close", () => { clearInterval(hb); sseClients.delete(client); });
+});
+
+// Quote ticks can arrive many times a second per symbol; coalesce them into
+// at most one push every 200ms so a busy market can't flood the browser.
+setInterval(() => {
+  if (!quotesDirty || !sseClients.size) return;
+  quotesDirty = false;
+  sseBroadcast("quotes", quotesPayload());
+}, 200);
 
 // Viewer issues a remote-control command for the bot.
 const COMMAND_TYPES = new Set(["close_position", "close_all", "halt", "pause_scanning", "resume_scanning", "set_risk"]);

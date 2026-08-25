@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #05060a; --panel: #0d1016; --panel2: #10141b; --bd: #1c222c; --bd2: #262e3a;
@@ -71,7 +70,10 @@
   }
   #heroChartWrap { flex: 1; position: relative; min-width: 0; padding: 8px 4px 4px 10px; }
   #heroChartWrap .tag { position: absolute; top: 8px; left: 14px; font: 700 9px var(--mono); letter-spacing: .12em; color: var(--dim); z-index: 2; }
+  #heroChartWrap .lastval { position: absolute; top: 8px; right: 16px; font: 700 11px var(--mono); z-index: 2; }
   #eqChart { width: 100%; height: 100%; display: block; }
+  #eqChart svg { width: 100%; height: 100%; display: block; }
+  .chartempty { color: var(--dim2); font: 400 10.5px var(--mono); display: flex; align-items: center; justify-content: center; height: 100%; }
   #narrateWrap {
     width: 380px; flex-shrink: 0; border-left: 1px solid var(--bd); padding: 9px 14px; display: flex; flex-direction: column; min-width: 0;
     background: rgba(63,200,255,.02);
@@ -224,7 +226,8 @@
   <div id="hero2">
     <div id="heroChartWrap">
       <span class="tag">LIVE EQUITY CURVE</span>
-      <canvas id="eqChart"></canvas>
+      <span class="lastval num" id="eqLastVal"></span>
+      <div id="eqChart"></div>
     </div>
     <div id="narrateWrap">
       <div id="narrateHead"><span class="radar"></span>FRIDAY LIVE<span class="eq"><i></i><i></i><i></i><i></i></span></div>
@@ -331,6 +334,10 @@ $("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (!isF
 /* ---------------- FRIDAY narration console ("Jarvis" feed) ---------------- */
 const narrationLog = [];
 function pushNarration(text, kind) {
+  // The scan result is identical minute after minute when every instrument is
+  // already held; repeating it verbatim buries the lines that actually matter.
+  const prev = narrationLog[narrationLog.length - 1];
+  if (prev && prev.text === text) { prev.repeat = (prev.repeat || 1) + 1; renderNarration(); return; }
   narrationLog.push({ text, kind: kind || "" });
   if (narrationLog.length > 40) narrationLog.shift();
   renderNarration();
@@ -339,7 +346,9 @@ function renderNarration() {
   const latest = narrationLog[narrationLog.length - 1];
   if (!latest) return;
   const lineEl = $("narrateLine");
-  lineEl.textContent = latest.text;
+  const suffix = latest.repeat > 1 ? `  (x${latest.repeat})` : "";
+  if (lineEl.textContent === latest.text + suffix) return; // don't restart the typewriter for nothing
+  lineEl.textContent = latest.text + suffix;
   lineEl.className = latest.kind || "";
   // restart the typewriter/caret animation on every new line
   lineEl.style.animation = "none";
@@ -381,7 +390,12 @@ function narrateFromResearch(latest) {
   if (wasFirstScan || firstState) return;
   const opened = log.filter(r => r.decision === "opened").length;
   const holding = log.filter(r => r.decision === "holding").length;
-  pushNarration(`Scan complete — ${log.length} instruments reviewed, ${holding} held, ${opened} new position${opened === 1 ? "" : "s"} opened.`, opened ? "up" : "");
+  // The most useful thing to say when nothing trades is *why* nothing traded.
+  if (!opened && holding === log.length && log.length) {
+    pushNarration(`Holding all ${log.length} instruments — no free slots, so no new entries until a stop or target closes one.`, "warn");
+    return;
+  }
+  pushNarration(`Scan complete — ${log.length} reviewed, ${holding} held, ${opened} new position${opened === 1 ? "" : "s"} opened.`, opened ? "up" : "");
 }
 function narrateConnection(connected, stale) {
   const state = stale ? "stale" : connected ? "connected" : "down";
@@ -394,46 +408,60 @@ function narrateConnection(connected, stale) {
   else if (state === "stale") pushNarration("No fresh report from the bot in a while — check it's still running.", "warn");
 }
 
-/* ---------------- live equity chart (Chart.js) ---------------- */
-let eqChart = null;
-function ensureChart() {
-  if (eqChart || typeof Chart === "undefined") return;
-  const canvas = $("eqChart");
-  const ctx = canvas.getContext("2d");
-  const grad = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || 120);
-  grad.addColorStop(0, "rgba(63,200,255,.4)");
-  grad.addColorStop(1, "rgba(63,200,255,0)");
-  eqChart = new Chart(ctx, {
-    type: "line",
-    data: { labels: [], datasets: [{
-      data: [], borderColor: "#3fc8ff", borderWidth: 2, pointRadius: 0,
-      fill: true, backgroundColor: grad, tension: 0.35, cubicInterpolationMode: "monotone",
-    }] },
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 350 },
-      interaction: { intersect: false },
-      scales: { x: { display: false }, y: { display: false } },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
-    },
-  });
-}
-function updateChart(equityHistory) {
-  ensureChart();
-  if (!eqChart) return;
-  const pts = (equityHistory || []).slice(-300).map(p => p.netLiquidation).filter(v => typeof v === "number");
-  if (pts.length < 2) return;
-  const up = pts[pts.length - 1] >= pts[0];
-  eqChart.data.labels = pts.map((_, i) => i);
-  eqChart.data.datasets[0].data = pts;
-  const color = up ? "#1fdb85" : "#ff5b56";
-  eqChart.data.datasets[0].borderColor = color;
-  const canvas = $("eqChart");
-  const ctx = canvas.getContext("2d");
-  const grad = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || 120);
-  grad.addColorStop(0, up ? "rgba(31,219,133,.4)" : "rgba(255,91,86,.4)");
-  grad.addColorStop(1, up ? "rgba(31,219,133,0)" : "rgba(255,91,86,0)");
-  eqChart.data.datasets[0].backgroundColor = grad;
-  eqChart.update("none");
+/* ---------------- live equity chart (self-contained SVG) ----------------
+   Deliberately hand-drawn rather than pulled from a charting CDN: the page
+   has to render on a locked-down browser with no third-party script access,
+   and a blank chart box is worse than a plain one. Same technique as the
+   position sparklines, which already render reliably.                     */
+function renderEquityChart(equityHistory) {
+  const host = $("eqChart");
+  const rows = (equityHistory || []).slice(-400).filter(p => typeof p.netLiquidation === "number");
+  const pts = rows.map(p => p.netLiquidation);
+  if (pts.length < 2) {
+    host.innerHTML = '<div class="chartempty">collecting equity data…</div>';
+    $("eqLastVal").textContent = "";
+    return;
+  }
+  const w = 1000, h = 110;
+  let min = Math.min(...pts), max = Math.max(...pts);
+  // A dead-flat equity curve would otherwise divide by zero and draw nothing;
+  // give it a nominal band so the line still renders across the middle.
+  if (max === min) { min -= 1; max += 1; }
+  const pad = (max - min) * 0.15;
+  min -= pad; max += pad;
+  const span = max - min;
+
+  const coords = pts.map((v, i) => [i / (pts.length - 1) * w, h - (v - min) / span * h]);
+  const line = coords.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
+  const area = `M0,${h} ` + coords.map(c => `L${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ") + ` L${w},${h} Z`;
+
+  const first = pts[0], last = pts[pts.length - 1];
+  const up = last >= first;
+  const stroke = up ? "#1fdb85" : "#ff5b56";
+  const gid = "eqgrad";
+  const grid = [0.25, 0.5, 0.75].map(f =>
+    `<line x1="0" y1="${(h * f).toFixed(1)}" x2="${w}" y2="${(h * f).toFixed(1)}" stroke="#1c222c" stroke-width="1" stroke-dasharray="3 5"/>`
+  ).join("");
+  const lastPt = coords[coords.length - 1];
+
+  host.innerHTML =
+    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
+      `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">` +
+        `<stop offset="0%" stop-color="${stroke}" stop-opacity="0.38"/>` +
+        `<stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>` +
+      `</linearGradient></defs>` +
+      grid +
+      `<path d="${area}" fill="url(#${gid})"/>` +
+      `<polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="2" ` +
+        `vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 4px ${stroke})"/>` +
+      `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="3" fill="${stroke}" ` +
+        `style="filter:drop-shadow(0 0 5px ${stroke})"/>` +
+    `</svg>`;
+
+  const delta = last - first;
+  const el = $("eqLastVal");
+  el.textContent = `${fmtM(last)}  ${delta >= 0 ? "+" : "-"}${fmtM(Math.abs(delta))}`;
+  el.className = "lastval num " + (up ? "up" : "down");
 }
 
 /* ---------------- positions ---------------- */
@@ -454,14 +482,19 @@ function latestOpenedBySymbol(recentTrades) {
   return out;
 }
 
+// Returns the summed live unrealized P&L across the cards it just drew, so
+// the header can show a figure that moves with the websocket ticks instead of
+// whatever the bot last reported.
 function renderPositions(positions, recentTrades) {
   $("posCount").textContent = positions.length + (positions.length === 1 ? " position" : " positions");
   $("hPos").textContent = positions.length;
   const host = $("positions");
-  if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return; }
+  if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return 0; }
   const openedMap = latestOpenedBySymbol(recentTrades);
   const seen = new Set();
   const nowMs = Date.now();
+  let livePnlTotal = 0;
+  let livePnlKnown = false;
   host.innerHTML = positions.map(p => {
     seen.add(p.symbol);
     const isFx = p.secType === "CASH";
@@ -481,6 +514,7 @@ function renderPositions(positions, recentTrades) {
       ? (lastPrice - p.avgCost) * qty
       : p.unrealizedPnl;
     const pnl = typeof livePnl === "number" ? livePnl : p.unrealizedPnl;
+    if (typeof pnl === "number" && isFinite(pnl)) { livePnlTotal += pnl; livePnlKnown = true; }
     const costBasis = haveCostBasis ? p.avgCost * absQty : null;
     const mktValue = (typeof lastPrice === "number") ? lastPrice * absQty : null;
     const pnlPct = (costBasis && costBasis !== 0) ? (pnl / costBasis) * 100 : null;
@@ -511,6 +545,7 @@ function renderPositions(positions, recentTrades) {
   host.querySelectorAll("button[data-sym]").forEach(b => b.onclick = () => {
     if (confirm(`Close position ${b.dataset.sym} at market?`)) sendCommand("close_position", { symbol: b.dataset.sym }, "CLOSE " + b.dataset.sym);
   });
+  return livePnlKnown ? livePnlTotal : null;
 }
 
 /* ---------------- live research feed ---------------- */
@@ -580,14 +615,18 @@ function setHeroStat(id, val, text, baseCls) {
   if (flash) { void el.offsetWidth; el.classList.add(flash); }
 }
 
-async function pollState() {
-  let state;
-  try {
-    const res = await fetch("/api/state");
-    if (!res.ok) throw 0;
-    state = await res.json();
-  } catch { $("statusDot").className = "dot bad"; $("statusSub").textContent = "OFFLINE"; return; }
+let lastRealizedToday = 0;
+// Repaints the header P&L from the live per-position numbers. Called on every
+// quote tick as well as every state push, so these move with the market
+// rather than only when the bot next reports.
+function updateHeroPnl(livePnlTotal) {
+  if (typeof livePnlTotal !== "number") return;
+  setHeroStat("hU", livePnlTotal, sgn(livePnlTotal) + fmtM(Math.abs(livePnlTotal)), "v num " + cls(livePnlTotal));
+  const day = livePnlTotal + (lastRealizedToday || 0);
+  setHeroStat("hDay", day, sgn(day) + fmtM(Math.abs(day)), "v num " + cls(day));
+}
 
+function applyState(state) {
   const l = state.latest;
   if (l) {
     const stale = state.lastReportAt && (Date.now() - new Date(state.lastReportAt) > 5 * 60_000);
@@ -598,9 +637,7 @@ async function pollState() {
     narrateConnection(l.connected, stale);
 
     setHeroStat("hEq", l.netLiquidation, fmtM(l.netLiquidation), "v num");
-    const day = (l.unrealizedPnl || 0) + (l.realizedPnlToday || 0);
-    setHeroStat("hDay", day, (day >= 0 ? "+" : "") + fmtM(day), "v num " + cls(day));
-    setHeroStat("hU", l.unrealizedPnl, (l.unrealizedPnl >= 0 ? "+" : "") + fmtM(l.unrealizedPnl), "v num " + cls(l.unrealizedPnl));
+    lastRealizedToday = l.realizedPnlToday || 0;
 
     $("killBanner").classList.toggle("show", !!l.killSwitchTripped);
     $("haltBanner").classList.toggle("show", !!l.dailyHalted && !l.killSwitchTripped);
@@ -608,7 +645,10 @@ async function pollState() {
 
     lastPositions = l.positions || [];
     lastRecentTrades = state.recentTrades || [];
-    renderPositions(lastPositions, lastRecentTrades);
+    // Prefer the live per-position sum; fall back to whatever the bot
+    // reported if we somehow can't compute one.
+    const livePnl = renderPositions(lastPositions, lastRecentTrades);
+    updateHeroPnl(typeof livePnl === "number" ? livePnl : l.unrealizedPnl);
     renderResearch(l);
     narrateFromResearch(l);
   } else {
@@ -616,30 +656,83 @@ async function pollState() {
   }
   narrateFromTrades(state.recentTrades);
   renderTrades(state.recentTrades);
-  updateChart(state.equityHistory);
+  renderEquityChart(state.equityHistory);
   firstState = false;
-  $("footRight").textContent = "state refreshed " + new Date().toLocaleTimeString();
+  $("footRight").textContent = "updated " + new Date().toLocaleTimeString();
+}
+
+async function pollState() {
+  let state;
+  try {
+    const res = await fetch("/api/state");
+    if (!res.ok) throw 0;
+    state = await res.json();
+  } catch { $("statusDot").className = "dot bad"; $("statusSub").textContent = "OFFLINE"; return; }
+  applyState(state);
 }
 
 let quoteFeedLive = false;
+let streamLive = false;
+function applyQuotes(j) {
+  quotesCache = j.quotes || {};
+  quoteFeedLive = !!j.wsConnected;
+  $("footLeft").textContent = "FRIDAY research desk · quotes " +
+    (quoteFeedLive ? "live (websocket)" : "delayed (rest fallback)") +
+    " · feed " + (streamLive ? "streaming" : "polling");
+  // Repaint positions and the header off every tick -- this is what makes
+  // P&L move continuously instead of stepping once per report.
+  if (lastPositions.length) {
+    const livePnl = renderPositions(lastPositions, lastRecentTrades);
+    updateHeroPnl(livePnl);
+  }
+}
 async function pollQuotes() {
   try {
     const res = await fetch("/api/quotes");
     if (!res.ok) return;
-    const j = await res.json();
-    quotesCache = j.quotes || {};
-    quoteFeedLive = !!j.wsConnected;
-    $("footLeft").textContent = "FRIDAY research desk · quotes " + (quoteFeedLive ? "live (websocket)" : "delayed (rest fallback)");
-    // Re-render positions off every quote tick, not just every full state
-    // poll -- this is what makes the P&L actually move in real time instead
-    // of jumping once every few seconds.
-    if (lastPositions.length) renderPositions(lastPositions, lastRecentTrades);
+    applyQuotes(await res.json());
   } catch {}
 }
 
-setInterval(() => pollState().catch(() => {}), 2000);
-setInterval(() => pollQuotes().catch(() => {}), 1500);
+/* ---------------- transport: stream first, poll as fallback ----------------
+   EventSource gets state/quote pushes the instant the server has them. If the
+   stream can't be established (proxy stripping it, connection dropped), the
+   polling timers below take over automatically so the page never goes dark. */
+let pollTimers = [];
+function startPolling() {
+  if (pollTimers.length) return;
+  pollTimers.push(setInterval(() => pollState().catch(() => {}), 2000));
+  pollTimers.push(setInterval(() => pollQuotes().catch(() => {}), 1500));
+}
+function stopPolling() {
+  pollTimers.forEach(clearInterval);
+  pollTimers = [];
+}
+
+function connectStream() {
+  let es;
+  try { es = new EventSource("/api/stream"); }
+  catch { startPolling(); return; }
+
+  es.addEventListener("state", e => {
+    streamLive = true; stopPolling();
+    try { applyState(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("quotes", e => {
+    streamLive = true; stopPolling();
+    try { applyQuotes(JSON.parse(e.data)); } catch {}
+  });
+  es.onerror = () => {
+    streamLive = false;
+    startPolling();          // keep the page alive while the stream is down
+    // EventSource retries on its own; nothing to do but let it.
+  };
+}
+
+// Paint immediately from a plain fetch, then hand over to the stream.
 pollState(); pollQuotes();
+connectStream();
+startPolling();  // cleared as soon as the first streamed event arrives
 </script>
 </body>
 </html>
