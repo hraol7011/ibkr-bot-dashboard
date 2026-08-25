@@ -4,11 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FRIDAY — Research Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #06070a; --panel: #0d1016; --panel2: #10141b; --bd: #1c222c; --bd2: #262e3a;
+    --bg: #05060a; --panel: #0d1016; --panel2: #10141b; --bd: #1c222c; --bd2: #262e3a;
     --txt: #e8ecf3; --dim: #7c8698; --dim2: #4d5666;
     --grn: #1fdb85; --red: #ff5b56; --amb: #f0a93b; --cyn: #3fc8ff; --violet: #a98bff;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --disp: "Orbitron", -apple-system, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -17,17 +23,22 @@
     font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
     overflow: hidden;
   }
-  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; font-family: var(--mono); }
   .up { color: var(--grn); } .down { color: var(--red); }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
 
-  #app { height: 100vh; display: flex; flex-direction: column; }
+  #app { height: 100vh; display: flex; flex-direction: column; position: relative; }
+  /* faint HUD scanline texture over the whole app */
+  #scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 80; opacity: .35; mix-blend-mode: overlay;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0px, rgba(255,255,255,.05) 1px, transparent 1px, transparent 3px);
+  }
 
   /* ---------------- header / hero ---------------- */
   #hdr {
-    display: flex; align-items: center; gap: 18px; padding: 10px 18px;
+    display: flex; align-items: center; gap: 18px; padding: 9px 18px;
     border-bottom: 1px solid var(--bd); background: linear-gradient(180deg, #0b0d12, #06070a);
     flex-shrink: 0; position: relative; overflow: hidden;
   }
@@ -42,14 +53,51 @@
   #brand .dot.live { background: var(--grn); box-shadow: 0 0 10px rgba(31,219,133,.8); animation: pulse 1.6s infinite; }
   #brand .dot.bad { background: var(--red); box-shadow: 0 0 10px rgba(255,91,86,.8); }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-  #brand .name { font-size: 15px; font-weight: 800; letter-spacing: .04em; }
-  #brand .sub { color: var(--dim); font-size: 10px; letter-spacing: .1em; }
-  #heroStats { display: flex; gap: 26px; margin-left: auto; z-index: 1; flex-wrap: wrap; }
+  #brand .name { font: 800 16px var(--disp); letter-spacing: .06em; color: var(--cyn); text-shadow: 0 0 16px rgba(63,200,255,.55); }
+  #brand .sub { color: var(--dim); font-size: 10px; letter-spacing: .1em; font-family: var(--mono); }
+  #heroStats { display: flex; gap: 24px; margin-left: auto; z-index: 1; flex-wrap: wrap; }
   .hstat { display: flex; flex-direction: column; align-items: flex-end; }
   .hstat .l { color: var(--dim); font-size: 9px; letter-spacing: .12em; font-weight: 700; }
-  .hstat .v { font-size: 22px; font-weight: 800; }
+  .hstat .v { font: 800 21px var(--mono); }
   .hstat .v.sm { font-size: 15px; }
-  #eqSpark { height: 26px; width: 110px; margin-left: 4px; }
+  .hstat .v.flashu { animation: flashTextUp 1s; } .hstat .v.flashd { animation: flashTextDown 1s; }
+  @keyframes flashTextUp { 0% { text-shadow: 0 0 16px rgba(31,219,133,1); } 100% { text-shadow: none; } }
+  @keyframes flashTextDown { 0% { text-shadow: 0 0 16px rgba(255,91,86,1); } 100% { text-shadow: none; } }
+
+  /* ---------------- hero chart + narration console ---------------- */
+  #hero2 {
+    display: flex; flex-shrink: 0; height: 132px; border-bottom: 1px solid var(--bd);
+    background: radial-gradient(ellipse at top, #0c1420 0%, #06070a 70%);
+  }
+  #heroChartWrap { flex: 1; position: relative; min-width: 0; padding: 8px 4px 4px 10px; }
+  #heroChartWrap .tag { position: absolute; top: 8px; left: 14px; font: 700 9px var(--mono); letter-spacing: .12em; color: var(--dim); z-index: 2; }
+  #eqChart { width: 100%; height: 100%; display: block; }
+  #narrateWrap {
+    width: 380px; flex-shrink: 0; border-left: 1px solid var(--bd); padding: 9px 14px; display: flex; flex-direction: column; min-width: 0;
+    background: rgba(63,200,255,.02);
+  }
+  #narrateHead { display: flex; align-items: center; gap: 7px; font: 800 10px var(--mono); letter-spacing: .14em; color: var(--cyn); margin-bottom: 7px; flex-shrink: 0; }
+  #narrateHead .eq { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
+  #narrateHead .eq i { width: 2.5px; background: var(--cyn); display: block; animation: eqBar 0.9s ease-in-out infinite; border-radius: 1px; }
+  #narrateHead .eq i:nth-child(1) { height: 40%; animation-delay: 0s; }
+  #narrateHead .eq i:nth-child(2) { height: 100%; animation-delay: .15s; }
+  #narrateHead .eq i:nth-child(3) { height: 65%; animation-delay: .3s; }
+  #narrateHead .eq i:nth-child(4) { height: 85%; animation-delay: .45s; }
+  @keyframes eqBar { 0%,100% { transform: scaleY(.4); opacity: .5; } 50% { transform: scaleY(1); opacity: 1; } }
+  #narrateLine {
+    font: 500 12.5px var(--mono); color: var(--cyn); text-shadow: 0 0 8px rgba(63,200,255,.55);
+    white-space: nowrap; overflow: hidden; border-right: 2px solid var(--cyn); max-width: 100%;
+    animation: typewriter 1.4s steps(64, end), caretBlink .9s step-end infinite;
+    flex-shrink: 0;
+  }
+  #narrateLine.up { color: var(--grn); text-shadow: 0 0 8px rgba(31,219,133,.55); border-color: var(--grn); }
+  #narrateLine.down { color: var(--red); text-shadow: 0 0 8px rgba(255,91,86,.55); border-color: var(--red); }
+  #narrateLine.warn { color: var(--amb); text-shadow: 0 0 8px rgba(240,169,59,.55); border-color: var(--amb); }
+  @keyframes typewriter { from { max-width: 0; } to { max-width: 100%; } }
+  @keyframes caretBlink { 50% { border-color: transparent; } }
+  #narrateHist { margin-top: 8px; overflow: hidden; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .nhist { font: 400 10.5px var(--mono); color: var(--dim2); opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nhist.up { color: #2a6d4f; } .nhist.down { color: #7a3a37; } .nhist.warn { color: #7a6530; }
 
   /* ---------------- control bar ---------------- */
   #ctl {
@@ -63,6 +111,7 @@
   .btn:hover { border-color: var(--dim); }
   .btn.danger { color: var(--red); border-color: #4a2323; } .btn.danger:hover { background: #1a0e0e; }
   .btn.ok { color: var(--grn); border-color: #1e3a2c; } .btn.ok:hover { background: #0d1a13; }
+  .btn.sm { padding: 4px 8px; font-size: 10px; }
   .riskin { width: 60px; background: var(--panel); border: 1px solid var(--bd2); color: var(--txt); padding: 5px 7px; border-radius: 3px; font: inherit; }
   #cmdStatus { color: var(--amb); font-size: 10.5px; margin-left: 4px; }
   .banner { display: none; padding: 6px 18px; font-weight: 700; font-size: 11.5px; letter-spacing: .03em; }
@@ -71,20 +120,20 @@
   .banner.warn { background: #2a220d; color: #ffcf7a; border-bottom: 1px solid #4a3d1f; }
 
   /* ---------------- main grid ---------------- */
-  #main { flex: 1; display: grid; grid-template-columns: 300px 1fr 340px; gap: 1px; background: var(--bd); overflow: hidden; }
-  @media (max-width: 1100px) { #main { grid-template-columns: 1fr; overflow-y: auto; } .col { min-height: 320px; } }
+  #main { flex: 1; display: grid; grid-template-columns: 320px 1fr 350px; gap: 1px; background: var(--bd); overflow: hidden; min-height: 0; }
+  @media (max-width: 1100px) { #main { grid-template-columns: 1fr; overflow-y: auto; } .col { min-height: 320px; } #hero2 { flex-direction: column; height: auto; } #narrateWrap { width: auto; border-left: none; border-top: 1px solid var(--bd); } #heroChartWrap { height: 100px; } }
   .col { background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
   .col .hd {
     padding: 9px 14px; border-bottom: 1px solid var(--bd); display: flex; align-items: center;
     justify-content: space-between; flex-shrink: 0; background: var(--panel);
   }
   .col .hd .t { font-size: 10.5px; font-weight: 800; letter-spacing: .13em; color: var(--cyn); }
-  .col .hd .r { color: var(--dim); font-size: 10px; }
+  .col .hd .r { color: var(--dim); font-size: 10px; font-family: var(--mono); }
   .col .bd { flex: 1; overflow-y: auto; padding: 10px; }
   .empty { color: var(--dim2); padding: 20px 8px; font-size: 11.5px; text-align: center; }
 
   /* radar (purely decorative "always running" motion cue) */
-  .radar { width: 13px; height: 13px; position: relative; }
+  .radar { width: 13px; height: 13px; position: relative; flex-shrink: 0; }
   .radar::before, .radar::after {
     content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--cyn);
   }
@@ -98,15 +147,15 @@
   .pcard .sym { font-size: 16px; font-weight: 800; }
   .pcard .dir { font-size: 9px; font-weight: 700; letter-spacing: .08em; margin-left: 7px; padding: 1px 5px; border-radius: 2px; }
   .pcard .dir.long { color: var(--grn); background: rgba(31,219,133,.12); } .pcard .dir.short { color: var(--red); background: rgba(255,91,86,.12); }
-  .pcard .pnl { font-size: 19px; font-weight: 800; }
-  .pcard .r1b { display: flex; justify-content: space-between; align-items: baseline; margin-top: 1px; }
-  .pcard .lastpx { color: var(--dim); font-size: 11px; display: flex; align-items: center; gap: 5px; }
+  .pcard .pnl { font: 800 20px var(--mono); }
+  .pcard .r1b { display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px; }
+  .pcard .lastpx { color: var(--dim); font: 500 11px var(--mono); display: flex; align-items: center; gap: 5px; }
   .pcard .livedot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim2); flex-shrink: 0; }
   .pcard .livedot.on { background: var(--grn); box-shadow: 0 0 6px rgba(31,219,133,.9); animation: pulse 1.6s infinite; }
-  .pcard .pnlpct { font-size: 11px; font-weight: 700; }
-  .pcard svg.spark { display: block; margin-top: 6px; width: 100%; height: 24px; }
-  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 7px; }
-  .pcard .r3 { color: var(--dim2); font-size: 9.5px; margin-top: 4px; }
+  .pcard .pnlpct { font: 700 11px var(--mono); }
+  .pcard svg.spark { display: block; margin-top: 7px; width: 100%; height: 34px; }
+  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font: 400 10px var(--mono); margin-top: 7px; }
+  .pcard .r3 { color: var(--dim2); font: 400 9.5px var(--mono); margin-top: 4px; }
   .pcard .r3 b { color: var(--dim); font-weight: 700; }
   .pcard .closebtn { margin-top: 7px; width: 100%; }
   .pcard.flashu { animation: flashUp 1.1s; } .pcard.flashd { animation: flashDown 1.1s; }
@@ -115,7 +164,7 @@
 
   /* ---------------- research cards ---------------- */
   .rcard { border: 1px solid var(--bd2); background: var(--panel2); border-radius: 4px; padding: 10px 13px; margin-bottom: 8px; border-left: 3px solid var(--dim2); }
-  .rcard.rc-opened { border-left-color: var(--grn); }
+  .rcard.rc-opened { border-left-color: var(--grn); box-shadow: -2px 0 10px -4px rgba(31,219,133,.6); }
   .rcard.rc-skipped { border-left-color: var(--amb); }
   .rcard.rc-no_signal { border-left-color: var(--bd2); }
   .rcard.rc-holding { border-left-color: var(--cyn); }
@@ -123,7 +172,7 @@
   .rcard .r1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .rcard .sym { font-size: 15px; font-weight: 800; }
   .rcard .nm { color: var(--dim); font-size: 10.5px; }
-  .rcard .px { margin-left: auto; font-weight: 700; font-size: 13px; }
+  .rcard .px { margin-left: auto; font: 700 13px var(--mono); }
   .rcard .badge { font-size: 8.5px; font-weight: 800; letter-spacing: .08em; padding: 2px 6px; border-radius: 2px; text-transform: uppercase; }
   .badge.opened { background: rgba(31,219,133,.15); color: var(--grn); }
   .badge.skipped { background: rgba(240,169,59,.15); color: var(--amb); }
@@ -140,26 +189,27 @@
 
   /* ---------------- trade feed cards ---------------- */
   .lcard { border: 1px solid var(--bd2); border-left: 4px solid var(--dim2); background: var(--panel2); padding: 9px 11px; margin-bottom: 8px; border-radius: 4px; }
-  .lcard.buy { border-left-color: var(--grn); } .lcard.sell { border-left-color: var(--red); }
+  .lcard.buy { border-left-color: var(--grn); box-shadow: -2px 0 10px -4px rgba(31,219,133,.5); } .lcard.sell { border-left-color: var(--red); box-shadow: -2px 0 10px -4px rgba(255,91,86,.5); }
   .lcard .side { font-size: 12px; font-weight: 800; letter-spacing: .05em; }
   .lcard.buy .side { color: var(--grn); } .lcard.sell .side { color: var(--red); }
   .lcard .sym { font-size: 14px; font-weight: 800; margin-left: 8px; }
-  .lcard .meta { color: var(--dim); font-size: 10.5px; margin-top: 4px; }
-  .lcard .time { color: var(--dim2); font-size: 9px; float: right; }
+  .lcard .meta { color: var(--dim); font: 400 10.5px var(--mono); margin-top: 4px; }
+  .lcard .time { color: var(--dim2); font: 400 9px var(--mono); float: right; }
   .lcard.lnew { animation: lIn .9s ease-out; }
   @keyframes lIn { 0% { transform: translateX(18px); opacity: 0; background: rgba(240,169,59,.25); } 60% { opacity: 1; } 100% { transform: none; background: var(--panel2); } }
 
-  #footer { padding: 5px 18px; color: var(--dim2); font-size: 9.5px; border-top: 1px solid var(--bd); display: flex; justify-content: space-between; flex-shrink: 0; }
+  #footer { padding: 5px 18px; color: var(--dim2); font: 400 9.5px var(--mono); border-top: 1px solid var(--bd); display: flex; justify-content: space-between; flex-shrink: 0; }
 </style>
 </head>
 <body>
+<div id="scanlines"></div>
 <div id="app">
 
   <div id="hdr">
     <div id="brand">
       <div class="dot" id="statusDot"></div>
       <div>
-        <div class="name">FRIDAY <span style="color:var(--dim); font-weight:600;">/ Research Desk</span></div>
+        <div class="name">FRIDAY</div>
         <div class="sub" id="statusSub">CONNECTING…</div>
       </div>
     </div>
@@ -168,7 +218,18 @@
       <div class="hstat"><span class="l">DAY P&amp;L</span><span class="v num" id="hDay">--</span></div>
       <div class="hstat"><span class="l">UNREALIZED</span><span class="v num" id="hU">--</span></div>
       <div class="hstat"><span class="l">POSITIONS</span><span class="v num sm" id="hPos">--</span></div>
-      <div class="hstat"><span class="l">EQUITY CURVE</span><svg id="eqSpark"></svg></div>
+    </div>
+  </div>
+
+  <div id="hero2">
+    <div id="heroChartWrap">
+      <span class="tag">LIVE EQUITY CURVE</span>
+      <canvas id="eqChart"></canvas>
+    </div>
+    <div id="narrateWrap">
+      <div id="narrateHead"><span class="radar"></span>FRIDAY LIVE<span class="eq"><i></i><i></i><i></i><i></i></span></div>
+      <div id="narrateLine">booting up…</div>
+      <div id="narrateHist"></div>
     </div>
   </div>
 
@@ -184,7 +245,7 @@
     <input class="riskin" id="riskIn" type="number" min="0.05" max="15" step="0.05">
     <button class="btn" id="btnRisk">APPLY</button>
     <span id="cmdStatus"></span>
-    <span style="margin-left:auto; color:var(--dim); font-size:10px;" id="modeTag"></span>
+    <span style="margin-left:auto; color:var(--dim); font-size:10px; font-family:var(--mono);" id="modeTag"></span>
   </div>
 
   <div id="main">
@@ -217,7 +278,7 @@ const fmtM = n => (typeof n !== "number" || isNaN(n)) ? "--" : n.toLocaleString(
 const dp = n => Math.abs(n) >= 1000 ? 2 : Math.abs(n) >= 1 ? 4 : 5;
 const fmtP = (n, d) => (typeof n !== "number" || isNaN(n)) ? "--" : n.toLocaleString("en-US", { minimumFractionDigits: d ?? dp(n), maximumFractionDigits: d ?? dp(n) });
 const cls = n => (typeof n !== "number") ? "" : n >= 0 ? "up" : "down";
-const sgn = n => (typeof n !== "number") ? "" : n >= 0 ? "+" : "";
+const sgn = n => (typeof n !== "number") ? "" : n > 0 ? "+" : n < 0 ? "-" : "";
 const ago = iso => { if (!iso) return ""; const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
   return s < 60 ? `${s | 0}s` : s < 3600 ? `${(s / 60) | 0}m` : `${(s / 3600) | 0}h`; };
 const tShort = iso => { try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); } catch { return ""; } };
@@ -231,12 +292,21 @@ const DECISION_LABEL = {
   market_closed: "MARKET CLOSED", error: "ERROR",
 };
 
+// Glowing sparkline: filled area + a stroke with a drop-shadow glow, drawn
+// in the position's own up/down color so the little chart actually reads
+// as "graphics" instead of a hairline.
 function sparkSvg(values, w, h, strokeClass) {
   if (!values || values.length < 2) return "";
   const min = Math.min(...values), max = Math.max(...values);
   const range = (max - min) || 1;
-  const pts = values.map((v, i) => `${(i / (values.length - 1) * w).toFixed(1)},${(h - (v - min) / range * h).toFixed(1)}`).join(" ");
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" class="${strokeClass || ""}"/></svg>`;
+  const coords = values.map((v, i) => [(i / (values.length - 1) * w), (h - (v - min) / range * h)]);
+  const ptsStr = coords.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
+  const areaD = `M0,${h} ` + coords.map(c => `L${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ") + ` L${w},${h} Z`;
+  const c = strokeClass || "";
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
+    `<path d="${areaD}" fill="currentColor" opacity="0.15" class="${c}"/>` +
+    `<polyline points="${ptsStr}" fill="none" stroke="currentColor" stroke-width="1.75" class="${c}" style="filter:drop-shadow(0 0 3px currentColor)"/>` +
+    `</svg>`;
 }
 
 /* ---------------- remote commands (safety controls) ---------------- */
@@ -257,6 +327,114 @@ $("btnCloseAll").onclick = () => { if (confirm("Close ALL open positions at mark
 $("btnPause").onclick = () => sendCommand("pause_scanning", {}, "PAUSE");
 $("btnResume").onclick = () => sendCommand("resume_scanning", {}, "RESUME");
 $("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (!isFinite(v)) return; sendCommand("set_risk", { pct: v }, "risk " + v + "%"); };
+
+/* ---------------- FRIDAY narration console ("Jarvis" feed) ---------------- */
+const narrationLog = [];
+function pushNarration(text, kind) {
+  narrationLog.push({ text, kind: kind || "" });
+  if (narrationLog.length > 40) narrationLog.shift();
+  renderNarration();
+}
+function renderNarration() {
+  const latest = narrationLog[narrationLog.length - 1];
+  if (!latest) return;
+  const lineEl = $("narrateLine");
+  lineEl.textContent = latest.text;
+  lineEl.className = latest.kind || "";
+  // restart the typewriter/caret animation on every new line
+  lineEl.style.animation = "none";
+  void lineEl.offsetWidth;
+  lineEl.style.animation = "";
+  const hist = narrationLog.slice(0, -1).slice(-5).reverse();
+  $("narrateHist").innerHTML = hist.map(h => `<div class="nhist ${h.kind || ""}">${h.text}</div>`).join("");
+}
+pushNarration("FRIDAY online — waiting for the bot's first report…");
+
+let narrationSeenTrades = new Set();
+let narrationSeenScan = null;
+let narrationPrevConnected = null;
+function narrateFromTrades(recentTrades) {
+  for (const t of (recentTrades || [])) {
+    const key = `${t.t}|${t.symbol}|${t.status}|${t.quantity}`;
+    if (narrationSeenTrades.has(key)) continue;
+    narrationSeenTrades.add(key);
+    if (firstState) continue; // don't narrate history as breaking news on first load
+    const dir = String(t.direction || "").toUpperCase();
+    const short = dir.includes("SELL") || dir.includes("SHORT") || dir === "BEAR";
+    const sideWord = short ? "SHORT" : "LONG";
+    if (t.status === "opened") {
+      pushNarration(`Opened ${sideWord} ${t.quantity} ${t.display || t.symbol} @ ${t.entry} — stop ${t.stop}, target ${t.target}.`, short ? "down" : "up");
+    } else if (t.status === "skipped") {
+      pushNarration(`Signals lined up on ${t.display || t.symbol} but risk check blocked the trade: ${t.reason || "blocked"}.`, "warn");
+    } else if (t.status === "error") {
+      pushNarration(`Order for ${t.display || t.symbol} failed to place — see app log.`, "warn");
+    }
+  }
+}
+function narrateFromResearch(latest) {
+  const log = latest?.researchLog || [];
+  if (!log.length) return;
+  const stamp = latest.botTimestamp || latest.receivedAt;
+  if (stamp === narrationSeenScan) return;
+  const wasFirstScan = narrationSeenScan === null;
+  narrationSeenScan = stamp;
+  if (wasFirstScan || firstState) return;
+  const opened = log.filter(r => r.decision === "opened").length;
+  const holding = log.filter(r => r.decision === "holding").length;
+  pushNarration(`Scan complete — ${log.length} instruments reviewed, ${holding} held, ${opened} new position${opened === 1 ? "" : "s"} opened.`, opened ? "up" : "");
+}
+function narrateConnection(connected, stale) {
+  const state = stale ? "stale" : connected ? "connected" : "down";
+  if (state === narrationPrevConnected) return;
+  const first = narrationPrevConnected === null;
+  narrationPrevConnected = state;
+  if (first) return;
+  if (state === "connected") pushNarration("Reconnected to IBKR — trading loop live.", "up");
+  else if (state === "down") pushNarration("Lost connection to IBKR — bot is attempting to reconnect.", "warn");
+  else if (state === "stale") pushNarration("No fresh report from the bot in a while — check it's still running.", "warn");
+}
+
+/* ---------------- live equity chart (Chart.js) ---------------- */
+let eqChart = null;
+function ensureChart() {
+  if (eqChart || typeof Chart === "undefined") return;
+  const canvas = $("eqChart");
+  const ctx = canvas.getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || 120);
+  grad.addColorStop(0, "rgba(63,200,255,.4)");
+  grad.addColorStop(1, "rgba(63,200,255,0)");
+  eqChart = new Chart(ctx, {
+    type: "line",
+    data: { labels: [], datasets: [{
+      data: [], borderColor: "#3fc8ff", borderWidth: 2, pointRadius: 0,
+      fill: true, backgroundColor: grad, tension: 0.35, cubicInterpolationMode: "monotone",
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 350 },
+      interaction: { intersect: false },
+      scales: { x: { display: false }, y: { display: false } },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    },
+  });
+}
+function updateChart(equityHistory) {
+  ensureChart();
+  if (!eqChart) return;
+  const pts = (equityHistory || []).slice(-300).map(p => p.netLiquidation).filter(v => typeof v === "number");
+  if (pts.length < 2) return;
+  const up = pts[pts.length - 1] >= pts[0];
+  eqChart.data.labels = pts.map((_, i) => i);
+  eqChart.data.datasets[0].data = pts;
+  const color = up ? "#1fdb85" : "#ff5b56";
+  eqChart.data.datasets[0].borderColor = color;
+  const canvas = $("eqChart");
+  const ctx = canvas.getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || 120);
+  grad.addColorStop(0, up ? "rgba(31,219,133,.4)" : "rgba(255,91,86,.4)");
+  grad.addColorStop(1, up ? "rgba(31,219,133,0)" : "rgba(255,91,86,0)");
+  eqChart.data.datasets[0].backgroundColor = grad;
+  eqChart.update("none");
+}
 
 /* ---------------- positions ---------------- */
 const prevPosPnl = {};
@@ -324,7 +502,7 @@ function renderPositions(positions, recentTrades) {
       `<span class="pnl ${cls(pnl)}">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</span></div>` +
       `<div class="r1b"><span class="lastpx"><span class="livedot ${liveOn ? "on" : ""}"></span>LAST ${fn(lastPrice)}</span>` +
       `<span class="pnlpct ${cls(pnlPct)}">${typeof pnlPct === "number" ? sgn(pnlPct) + fmtP(Math.abs(pnlPct), 2) + "%" : "--"}</span></div>` +
-      (spark ? sparkSvg(spark, 200, 24, cls(pnl)) : "") +
+      (spark ? sparkSvg(spark, 200, 34, cls(pnl)) : "") +
       `<div class="r2"><span>AVG ${fn(p.avgCost)}</span><span>VALUE ${mktValue != null ? fmtM(mktValue) : "--"}</span><span>COST ${costBasis != null ? fmtM(costBasis) : "--"}</span></div>` +
       `<div class="r3">${detailLine}</div>` +
       `<button class="btn danger sm closebtn" data-sym="${p.symbol}">CLOSE</button></div>`;
@@ -384,19 +562,23 @@ function renderTrades(recentTrades) {
   }).join("");
 }
 
-/* ---------------- equity curve sparkline ---------------- */
-function renderEquitySpark(equityHistory) {
-  const svg = $("eqSpark");
-  const pts = (equityHistory || []).slice(-200).map(p => p.netLiquidation).filter(v => typeof v === "number");
-  if (pts.length < 2) { svg.innerHTML = ""; return; }
-  const up = pts[pts.length - 1] >= pts[0];
-  svg.setAttribute("viewBox", "0 0 110 26");
-  svg.innerHTML = sparkSvg(pts, 110, 26, up ? "up" : "down").replace(/^<svg[^>]*>|<\\/svg>$/g, "");
-}
-
 /* ---------------- main poll loop ---------------- */
 let lastPositions = [];
 let lastRecentTrades = [];
+const prevHeroVal = {};
+// Sets a hero-stat's text + base class, then -- if the value actually moved
+// since last poll -- forces a reflow and adds the flash class fresh so the
+// glow animation restarts every time, even on repeated same-direction moves.
+function setHeroStat(id, val, text, baseCls) {
+  const el = $(id);
+  const prev = prevHeroVal[id];
+  const flash = (typeof prev === "number" && typeof val === "number" && Math.abs(val - prev) > 0.005)
+    ? (val > prev ? "flashu" : "flashd") : "";
+  prevHeroVal[id] = val;
+  el.textContent = text;
+  el.className = baseCls;
+  if (flash) { void el.offsetWidth; el.classList.add(flash); }
+}
 
 async function pollState() {
   let state;
@@ -413,11 +595,12 @@ async function pollState() {
     $("statusSub").textContent = (stale ? "STALE" : l.connected ? "LIVE" : "DOWN") + " · " +
       (l.mode || "").toUpperCase() + " · report " + ago(state.lastReportAt) + " ago";
     $("modeTag").textContent = (l.accountId || "") + " · " + (l.mode || "").toUpperCase();
+    narrateConnection(l.connected, stale);
 
-    $("hEq").textContent = fmtM(l.netLiquidation);
+    setHeroStat("hEq", l.netLiquidation, fmtM(l.netLiquidation), "v num");
     const day = (l.unrealizedPnl || 0) + (l.realizedPnlToday || 0);
-    $("hDay").textContent = (day >= 0 ? "+" : "") + fmtM(day); $("hDay").className = "v num " + cls(day);
-    $("hU").textContent = (l.unrealizedPnl >= 0 ? "+" : "") + fmtM(l.unrealizedPnl); $("hU").className = "v num " + cls(l.unrealizedPnl);
+    setHeroStat("hDay", day, (day >= 0 ? "+" : "") + fmtM(day), "v num " + cls(day));
+    setHeroStat("hU", l.unrealizedPnl, (l.unrealizedPnl >= 0 ? "+" : "") + fmtM(l.unrealizedPnl), "v num " + cls(l.unrealizedPnl));
 
     $("killBanner").classList.toggle("show", !!l.killSwitchTripped);
     $("haltBanner").classList.toggle("show", !!l.dailyHalted && !l.killSwitchTripped);
@@ -427,11 +610,13 @@ async function pollState() {
     lastRecentTrades = state.recentTrades || [];
     renderPositions(lastPositions, lastRecentTrades);
     renderResearch(l);
+    narrateFromResearch(l);
   } else {
     $("statusDot").className = "dot bad"; $("statusSub").textContent = "no bot reports yet";
   }
+  narrateFromTrades(state.recentTrades);
   renderTrades(state.recentTrades);
-  renderEquitySpark(state.equityHistory);
+  updateChart(state.equityHistory);
   firstState = false;
   $("footRight").textContent = "state refreshed " + new Date().toLocaleTimeString();
 }
