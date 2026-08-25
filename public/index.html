@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FRIDAY — Research Desk</title>
+<title>FRIDAY — Trading Desk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #05060a; --panel: #0d1016; --panel2: #10141b; --bd: #1c222c; --bd2: #262e3a;
@@ -17,194 +17,196 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body {
-    margin: 0; background: var(--bg); color: var(--txt);
-    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-    overflow: hidden;
-  }
-  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; font-family: var(--mono); }
+  body { margin: 0; background: var(--bg); color: var(--txt);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; overflow: hidden; }
+  .num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
   .up { color: var(--grn); } .down { color: var(--red); }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
+  #app { height: 100vh; display: flex; flex-direction: column; }
 
-  #app { height: 100vh; display: flex; flex-direction: column; position: relative; }
-  /* faint HUD scanline texture over the whole app */
-  #scanlines {
-    position: fixed; inset: 0; pointer-events: none; z-index: 80; opacity: .35; mix-blend-mode: overlay;
-    background: repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0px, rgba(255,255,255,.05) 1px, transparent 1px, transparent 3px);
-  }
-
-  /* ---------------- header / hero ---------------- */
-  #hdr {
-    display: flex; align-items: center; gap: 18px; padding: 9px 18px;
-    border-bottom: 1px solid var(--bd); background: linear-gradient(180deg, #0b0d12, #06070a);
-    flex-shrink: 0; position: relative; overflow: hidden;
-  }
-  #hdr::before {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(90deg, transparent, rgba(63,200,255,.06), transparent);
-    width: 40%; animation: sweep 7s linear infinite;
-  }
+  /* ---------- header ---------- */
+  #hdr { display: flex; align-items: center; gap: 18px; padding: 8px 18px; border-bottom: 1px solid var(--bd);
+    background: linear-gradient(180deg, #0b0d12, #06070a); flex-shrink: 0; position: relative; overflow: hidden; }
+  #hdr::before { content: ""; position: absolute; inset: 0; pointer-events: none; width: 40%;
+    background: linear-gradient(90deg, transparent, rgba(63,200,255,.06), transparent); animation: sweep 7s linear infinite; }
   @keyframes sweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
   #brand { display: flex; align-items: center; gap: 9px; z-index: 1; }
   #brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim2); flex-shrink: 0; }
   #brand .dot.live { background: var(--grn); box-shadow: 0 0 10px rgba(31,219,133,.8); animation: pulse 1.6s infinite; }
   #brand .dot.bad { background: var(--red); box-shadow: 0 0 10px rgba(255,91,86,.8); }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-  #brand .name { font: 800 16px var(--disp); letter-spacing: .06em; color: var(--cyn); text-shadow: 0 0 16px rgba(63,200,255,.55); }
-  #brand .sub { color: var(--dim); font-size: 10px; letter-spacing: .1em; font-family: var(--mono); }
-  #heroStats { display: flex; gap: 24px; margin-left: auto; z-index: 1; flex-wrap: wrap; }
-  .hstat { display: flex; flex-direction: column; align-items: flex-end; }
-  .hstat .l { color: var(--dim); font-size: 9px; letter-spacing: .12em; font-weight: 700; }
-  .hstat .v { font: 800 21px var(--mono); }
-  .hstat .v.sm { font-size: 15px; }
-  .hstat .v.flashu { animation: flashTextUp 1s; } .hstat .v.flashd { animation: flashTextDown 1s; }
-  @keyframes flashTextUp { 0% { text-shadow: 0 0 16px rgba(31,219,133,1); } 100% { text-shadow: none; } }
-  @keyframes flashTextDown { 0% { text-shadow: 0 0 16px rgba(255,91,86,1); } 100% { text-shadow: none; } }
+  #brand .name { font: 800 17px var(--disp); letter-spacing: .07em; color: var(--cyn); text-shadow: 0 0 18px rgba(63,200,255,.6); }
+  #brand .sub { color: var(--dim); font: 400 10px var(--mono); letter-spacing: .1em; }
+  #heroStats { display: flex; gap: 22px; margin-left: auto; z-index: 1; flex-wrap: wrap; align-items: flex-end; }
+  .hstat { display: flex; flex-direction: column; align-items: flex-end; position: relative; padding: 2px 0; }
+  .hstat .l { color: var(--dim); font-size: 8.5px; letter-spacing: .14em; font-weight: 700; }
+  .hstat .v { font: 800 24px var(--mono); letter-spacing: -.01em; transition: text-shadow .35s; }
+  .hstat .v.sm { font-size: 16px; }
+  .hstat.big .v { font-size: 27px; }
+  .hstat .v.up { text-shadow: 0 0 18px rgba(31,219,133,.55); }
+  .hstat .v.down { text-shadow: 0 0 18px rgba(255,91,86,.55); }
+  .hstat .bar { height: 2px; width: 100%; margin-top: 3px; border-radius: 2px; background: var(--bd2); overflow: hidden; }
+  .hstat .bar i { display: block; height: 100%; width: 0%; transition: width .5s ease, background .3s; }
 
-  /* ---------------- hero chart + narration console ---------------- */
-  #hero2 {
-    display: flex; flex-shrink: 0; height: 132px; border-bottom: 1px solid var(--bd);
-    background: radial-gradient(ellipse at top, #0c1420 0%, #06070a 70%);
-  }
-  #heroChartWrap { flex: 1; position: relative; min-width: 0; padding: 8px 4px 4px 10px; }
-  #heroChartWrap .tag { position: absolute; top: 8px; left: 14px; font: 700 9px var(--mono); letter-spacing: .12em; color: var(--dim); z-index: 2; }
-  #heroChartWrap .lastval { position: absolute; top: 8px; right: 16px; font: 700 11px var(--mono); z-index: 2; }
-  #eqChart { width: 100%; height: 100%; display: block; }
+  /* ---------- equity strip ---------- */
+  #eqStrip { position: relative; height: 84px; flex-shrink: 0; border-bottom: 1px solid var(--bd);
+    background: radial-gradient(ellipse at top, #0b1622 0%, #05060a 75%); }
+  #eqStrip .tag { position: absolute; top: 7px; left: 16px; font: 700 8.5px var(--mono); letter-spacing: .14em; color: var(--dim); z-index: 2; }
+  #eqStrip .lastval { position: absolute; top: 6px; right: 16px; font: 700 11px var(--mono); z-index: 2; }
+  #eqChart { width: 100%; height: 100%; }
   #eqChart svg { width: 100%; height: 100%; display: block; }
-  .chartempty { color: var(--dim2); font: 400 10.5px var(--mono); display: flex; align-items: center; justify-content: center; height: 100%; }
-  #narrateWrap {
-    width: 380px; flex-shrink: 0; border-left: 1px solid var(--bd); padding: 9px 14px; display: flex; flex-direction: column; min-width: 0;
-    background: rgba(63,200,255,.02);
-  }
-  #narrateHead { display: flex; align-items: center; gap: 7px; font: 800 10px var(--mono); letter-spacing: .14em; color: var(--cyn); margin-bottom: 7px; flex-shrink: 0; }
-  #narrateHead .eq { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
-  #narrateHead .eq i { width: 2.5px; background: var(--cyn); display: block; animation: eqBar 0.9s ease-in-out infinite; border-radius: 1px; }
-  #narrateHead .eq i:nth-child(1) { height: 40%; animation-delay: 0s; }
-  #narrateHead .eq i:nth-child(2) { height: 100%; animation-delay: .15s; }
-  #narrateHead .eq i:nth-child(3) { height: 65%; animation-delay: .3s; }
-  #narrateHead .eq i:nth-child(4) { height: 85%; animation-delay: .45s; }
-  @keyframes eqBar { 0%,100% { transform: scaleY(.4); opacity: .5; } 50% { transform: scaleY(1); opacity: 1; } }
-  #narrateLine {
-    font: 500 12.5px var(--mono); color: var(--cyn); text-shadow: 0 0 8px rgba(63,200,255,.55);
-    white-space: nowrap; overflow: hidden; border-right: 2px solid var(--cyn); max-width: 100%;
-    animation: typewriter 1.4s steps(64, end), caretBlink .9s step-end infinite;
-    flex-shrink: 0;
-  }
-  #narrateLine.up { color: var(--grn); text-shadow: 0 0 8px rgba(31,219,133,.55); border-color: var(--grn); }
-  #narrateLine.down { color: var(--red); text-shadow: 0 0 8px rgba(255,91,86,.55); border-color: var(--red); }
-  #narrateLine.warn { color: var(--amb); text-shadow: 0 0 8px rgba(240,169,59,.55); border-color: var(--amb); }
-  @keyframes typewriter { from { max-width: 0; } to { max-width: 100%; } }
-  @keyframes caretBlink { 50% { border-color: transparent; } }
-  #narrateHist { margin-top: 8px; overflow: hidden; flex: 1; display: flex; flex-direction: column; gap: 4px; }
-  .nhist { font: 400 10.5px var(--mono); color: var(--dim2); opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nhist.up { color: #2a6d4f; } .nhist.down { color: #7a3a37; } .nhist.warn { color: #7a6530; }
+  .chartempty { color: var(--dim2); font: 400 10px var(--mono); display: flex; align-items: center; justify-content: center; height: 100%; }
 
-  /* ---------------- control bar ---------------- */
-  #ctl {
-    display: flex; align-items: center; gap: 8px; padding: 6px 18px;
-    background: var(--panel2); border-bottom: 1px solid var(--bd); flex-shrink: 0; flex-wrap: wrap;
-  }
-  .btn {
-    background: var(--panel); border: 1px solid var(--bd2); color: var(--txt); padding: 5px 11px;
-    font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .03em; cursor: pointer; border-radius: 3px;
-  }
+  /* ---------- controls ---------- */
+  #ctl { display: flex; align-items: center; gap: 8px; padding: 6px 18px; background: var(--panel2);
+    border-bottom: 1px solid var(--bd); flex-shrink: 0; flex-wrap: wrap; }
+  .btn { background: var(--panel); border: 1px solid var(--bd2); color: var(--txt); padding: 5px 11px;
+    font: 700 11px inherit; letter-spacing: .03em; cursor: pointer; border-radius: 3px; }
   .btn:hover { border-color: var(--dim); }
   .btn.danger { color: var(--red); border-color: #4a2323; } .btn.danger:hover { background: #1a0e0e; }
   .btn.ok { color: var(--grn); border-color: #1e3a2c; } .btn.ok:hover { background: #0d1a13; }
+  .btn.cyn { color: var(--cyn); border-color: #1e3a4a; } .btn.cyn:hover { background: #0d1720; }
   .btn.sm { padding: 4px 8px; font-size: 10px; }
-  .riskin { width: 60px; background: var(--panel); border: 1px solid var(--bd2); color: var(--txt); padding: 5px 7px; border-radius: 3px; font: inherit; }
+  .riskin { width: 60px; background: var(--panel); border: 1px solid var(--bd2); color: var(--txt);
+    padding: 5px 7px; border-radius: 3px; font: inherit; }
   #cmdStatus { color: var(--amb); font-size: 10.5px; margin-left: 4px; }
-  .banner { display: none; padding: 6px 18px; font-weight: 700; font-size: 11.5px; letter-spacing: .03em; }
+  .banner { display: none; padding: 6px 18px; font-weight: 700; font-size: 11.5px; }
   .banner.show { display: block; }
   .banner.halt { background: #2a0d0d; color: #ff8b86; border-bottom: 1px solid #4a1f1f; }
   .banner.warn { background: #2a220d; color: #ffcf7a; border-bottom: 1px solid #4a3d1f; }
 
-  /* ---------------- main grid ---------------- */
-  #main { flex: 1; display: grid; grid-template-columns: 320px 1fr 350px; gap: 1px; background: var(--bd); overflow: hidden; min-height: 0; }
-  @media (max-width: 1100px) { #main { grid-template-columns: 1fr; overflow-y: auto; } .col { min-height: 320px; } #hero2 { flex-direction: column; height: auto; } #narrateWrap { width: auto; border-left: none; border-top: 1px solid var(--bd); } #heroChartWrap { height: 100px; } }
-  .col { background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
-  .col .hd {
-    padding: 9px 14px; border-bottom: 1px solid var(--bd); display: flex; align-items: center;
-    justify-content: space-between; flex-shrink: 0; background: var(--panel);
-  }
-  .col .hd .t { font-size: 10.5px; font-weight: 800; letter-spacing: .13em; color: var(--cyn); }
-  .col .hd .r { color: var(--dim); font-size: 10px; font-family: var(--mono); }
-  .col .bd { flex: 1; overflow-y: auto; padding: 10px; }
+  /* ---------- layout ---------- */
+  #main { flex: 1; display: grid; grid-template-columns: 320px 1fr 400px; gap: 1px; background: var(--bd); overflow: hidden; min-height: 0; }
+  .colstack { display: flex; flex-direction: column; gap: 1px; background: var(--bd); min-height: 0; overflow: hidden; }
+  .col { background: var(--bg); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .col .hd { padding: 8px 14px; border-bottom: 1px solid var(--bd); display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0; background: var(--panel); gap: 8px; }
+  .col .hd .t { font-size: 10px; font-weight: 800; letter-spacing: .13em; color: var(--cyn); display: flex; align-items: center; gap: 8px; }
+  .col .hd .r { color: var(--dim); font: 400 9.5px var(--mono); }
+  .col .bd { flex: 1; overflow-y: auto; padding: 10px; min-height: 0; }
   .empty { color: var(--dim2); padding: 20px 8px; font-size: 11.5px; text-align: center; }
+  @media (max-width: 1250px) { #main { grid-template-columns: 1fr; overflow-y: auto; } .col { min-height: 300px; } #globeCol { min-height: 420px; } }
 
-  /* radar (purely decorative "always running" motion cue) */
-  .radar { width: 13px; height: 13px; position: relative; flex-shrink: 0; }
-  .radar::before, .radar::after {
-    content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--cyn);
-  }
+  .radar { width: 12px; height: 12px; position: relative; flex-shrink: 0; }
+  .radar::before, .radar::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--cyn); }
   .radar::before { animation: radarPing 2.2s ease-out infinite; }
   .radar::after { opacity: .4; }
   @keyframes radarPing { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
 
-  /* ---------------- position cards ---------------- */
+  /* ---------- globe ---------- */
+  #globeCol { flex: 1.9; }
+  #globeWrap { position: relative; flex: 1; min-height: 0; background:
+     radial-gradient(ellipse at 50% 45%, #0a1420 0%, #05060a 70%); overflow: hidden; }
+  #globeCanvas { width: 100%; height: 100%; display: block; cursor: grab; }
+  #globeCanvas:active { cursor: grabbing; }
+  #globeHint { position: absolute; left: 12px; bottom: 10px; font: 400 9px var(--mono); color: var(--dim2); pointer-events: none; }
+  #globeLegend { position: absolute; right: 12px; top: 10px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  #globeLegend span { font: 600 9px var(--mono); display: flex; align-items: center; gap: 5px; color: var(--dim); }
+  #globeLegend i { width: 7px; height: 7px; border-radius: 50%; display: block; }
+  #globeTools { position: absolute; left: 12px; top: 10px; display: flex; gap: 6px; }
+
+  /* ---------- position cards ---------- */
   .pcard { border: 1px solid var(--bd2); background: var(--panel2); padding: 10px 12px; margin-bottom: 8px; border-radius: 4px; }
   .pcard .r1 { display: flex; justify-content: space-between; align-items: baseline; }
-  .pcard .sym { font-size: 16px; font-weight: 800; }
-  .pcard .dir { font-size: 9px; font-weight: 700; letter-spacing: .08em; margin-left: 7px; padding: 1px 5px; border-radius: 2px; }
-  .pcard .dir.long { color: var(--grn); background: rgba(31,219,133,.12); } .pcard .dir.short { color: var(--red); background: rgba(255,91,86,.12); }
-  .pcard .pnl { font: 800 20px var(--mono); }
+  .pcard .sym { font-size: 15px; font-weight: 800; }
+  .pcard .dir { font-size: 8.5px; font-weight: 700; letter-spacing: .08em; margin-left: 7px; padding: 1px 5px; border-radius: 2px; }
+  .pcard .dir.long { color: var(--grn); background: rgba(31,219,133,.12); }
+  .pcard .dir.short { color: var(--red); background: rgba(255,91,86,.12); }
+  .pcard .pnl { font: 800 19px var(--mono); }
   .pcard .r1b { display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px; }
-  .pcard .lastpx { color: var(--dim); font: 500 11px var(--mono); display: flex; align-items: center; gap: 5px; }
+  .pcard .lastpx { color: var(--dim); font: 500 10.5px var(--mono); display: flex; align-items: center; gap: 5px; }
   .pcard .livedot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim2); flex-shrink: 0; }
   .pcard .livedot.on { background: var(--grn); box-shadow: 0 0 6px rgba(31,219,133,.9); animation: pulse 1.6s infinite; }
-  .pcard .pnlpct { font: 700 11px var(--mono); }
-  .pcard svg.spark { display: block; margin-top: 7px; width: 100%; height: 34px; }
-  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font: 400 10px var(--mono); margin-top: 7px; }
-  .pcard .r3 { color: var(--dim2); font: 400 9.5px var(--mono); margin-top: 4px; }
+  .pcard .pnlpct { font: 700 10.5px var(--mono); }
+  .pcard svg.spark { display: block; margin-top: 7px; width: 100%; height: 30px; }
+  /* stop -> entry -> target ladder, so risk is visible at a glance */
+  .ladder { margin-top: 8px; }
+  .ladder .track { position: relative; height: 4px; border-radius: 2px; background: linear-gradient(90deg, rgba(255,91,86,.5), rgba(124,134,152,.3), rgba(31,219,133,.5)); }
+  .ladder .mk { position: absolute; top: -3px; width: 2px; height: 10px; background: var(--txt); border-radius: 1px; }
+  .ladder .mk.now { width: 3px; height: 12px; top: -4px; box-shadow: 0 0 7px currentColor; }
+  .ladder .lbls { display: flex; justify-content: space-between; color: var(--dim2); font: 400 8.5px var(--mono); margin-top: 3px; }
+  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font: 400 9.5px var(--mono); margin-top: 7px; }
+  .pcard .r3 { color: var(--dim2); font: 400 9px var(--mono); margin-top: 4px; }
   .pcard .r3 b { color: var(--dim); font-weight: 700; }
   .pcard .closebtn { margin-top: 7px; width: 100%; }
   .pcard.flashu { animation: flashUp 1.1s; } .pcard.flashd { animation: flashDown 1.1s; }
-  @keyframes flashUp { 0% { background: rgba(31,219,133,.28); } 100% { background: var(--panel2); } }
-  @keyframes flashDown { 0% { background: rgba(255,91,86,.28); } 100% { background: var(--panel2); } }
+  @keyframes flashUp { 0% { background: rgba(31,219,133,.26); } 100% { background: var(--panel2); } }
+  @keyframes flashDown { 0% { background: rgba(255,91,86,.26); } 100% { background: var(--panel2); } }
 
-  /* ---------------- research cards ---------------- */
-  .rcard { border: 1px solid var(--bd2); background: var(--panel2); border-radius: 4px; padding: 10px 13px; margin-bottom: 8px; border-left: 3px solid var(--dim2); }
+  /* ---------- research ---------- */
+  .rcard { border: 1px solid var(--bd2); background: var(--panel2); border-radius: 4px; padding: 9px 12px;
+    margin-bottom: 7px; border-left: 3px solid var(--dim2); }
   .rcard.rc-opened { border-left-color: var(--grn); box-shadow: -2px 0 10px -4px rgba(31,219,133,.6); }
   .rcard.rc-skipped { border-left-color: var(--amb); }
-  .rcard.rc-no_signal { border-left-color: var(--bd2); }
   .rcard.rc-holding { border-left-color: var(--cyn); }
   .rcard.rc-error { border-left-color: var(--red); }
-  .rcard .r1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .rcard .sym { font-size: 15px; font-weight: 800; }
-  .rcard .nm { color: var(--dim); font-size: 10.5px; }
-  .rcard .px { margin-left: auto; font: 700 13px var(--mono); }
-  .rcard .badge { font-size: 8.5px; font-weight: 800; letter-spacing: .08em; padding: 2px 6px; border-radius: 2px; text-transform: uppercase; }
+  .rcard .r1 { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .rcard .sym { font-size: 14px; font-weight: 800; }
+  .rcard .nm { color: var(--dim); font-size: 10px; }
+  .rcard .px { margin-left: auto; font: 700 12px var(--mono); }
+  .rcard .badge { font-size: 8px; font-weight: 800; letter-spacing: .08em; padding: 2px 6px; border-radius: 2px; }
   .badge.opened { background: rgba(31,219,133,.15); color: var(--grn); }
   .badge.skipped { background: rgba(240,169,59,.15); color: var(--amb); }
   .badge.no_signal { background: rgba(124,134,152,.15); color: var(--dim); }
   .badge.holding { background: rgba(63,200,255,.15); color: var(--cyn); }
   .badge.market_closed { background: rgba(124,134,152,.1); color: var(--dim2); }
   .badge.error { background: rgba(255,91,86,.15); color: var(--red); }
-  .rcard .sigs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 7px; }
-  .sig { font-size: 8.5px; font-weight: 700; padding: 2px 6px; border-radius: 2px; border: 1px solid var(--bd2); letter-spacing: .04em; cursor: default; }
-  .sig.bull { color: var(--grn); border-color: #1e3a2c; } .sig.bear { color: var(--red); border-color: #4a2323; } .sig.neutral { color: var(--dim2); }
-  .rcard .reason { color: var(--dim); font-size: 10.5px; margin-top: 6px; }
+  .rcard .sigs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .sig { font-size: 8px; font-weight: 700; padding: 2px 5px; border-radius: 2px; border: 1px solid var(--bd2); }
+  .sig.bull { color: var(--grn); border-color: #1e3a2c; }
+  .sig.bear { color: var(--red); border-color: #4a2323; }
+  .sig.neutral { color: var(--dim2); }
+  .rcard .reason { color: var(--dim); font-size: 10px; margin-top: 5px; }
   .rcard.rnew { animation: rIn .8s ease-out; }
   @keyframes rIn { 0% { opacity: 0; transform: translateY(-6px); background: rgba(63,200,255,.12); } 100% { opacity: 1; transform: none; } }
 
-  /* ---------------- trade feed cards ---------------- */
-  .lcard { border: 1px solid var(--bd2); border-left: 4px solid var(--dim2); background: var(--panel2); padding: 9px 11px; margin-bottom: 8px; border-radius: 4px; }
-  .lcard.buy { border-left-color: var(--grn); box-shadow: -2px 0 10px -4px rgba(31,219,133,.5); } .lcard.sell { border-left-color: var(--red); box-shadow: -2px 0 10px -4px rgba(255,91,86,.5); }
-  .lcard .side { font-size: 12px; font-weight: 800; letter-spacing: .05em; }
+  /* ---------- trade feed ---------- */
+  .lcard { border: 1px solid var(--bd2); border-left: 4px solid var(--dim2); background: var(--panel2);
+    padding: 8px 11px; margin-bottom: 7px; border-radius: 4px; }
+  .lcard.buy { border-left-color: var(--grn); box-shadow: -2px 0 10px -4px rgba(31,219,133,.5); }
+  .lcard.sell { border-left-color: var(--red); box-shadow: -2px 0 10px -4px rgba(255,91,86,.5); }
+  .lcard .side { font-size: 11.5px; font-weight: 800; }
   .lcard.buy .side { color: var(--grn); } .lcard.sell .side { color: var(--red); }
-  .lcard .sym { font-size: 14px; font-weight: 800; margin-left: 8px; }
-  .lcard .meta { color: var(--dim); font: 400 10.5px var(--mono); margin-top: 4px; }
+  .lcard .sym { font-size: 13px; font-weight: 800; margin-left: 8px; }
+  .lcard .meta { color: var(--dim); font: 400 10px var(--mono); margin-top: 3px; }
+  .lcard .route { color: var(--dim2); font: 400 9px var(--mono); margin-top: 2px; }
   .lcard .time { color: var(--dim2); font: 400 9px var(--mono); float: right; }
   .lcard.lnew { animation: lIn .9s ease-out; }
-  @keyframes lIn { 0% { transform: translateX(18px); opacity: 0; background: rgba(240,169,59,.25); } 60% { opacity: 1; } 100% { transform: none; background: var(--panel2); } }
+  @keyframes lIn { 0% { transform: translateX(18px); opacity: 0; background: rgba(240,169,59,.25); } 100% { transform: none; background: var(--panel2); } }
 
-  #footer { padding: 5px 18px; color: var(--dim2); font: 400 9.5px var(--mono); border-top: 1px solid var(--bd); display: flex; justify-content: space-between; flex-shrink: 0; }
+  /* ---------- FRIDAY chat ---------- */
+  #fridayCol { min-height: 0; }
+  #chatLog { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .msg { max-width: 92%; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.friday { align-self: flex-start; color: var(--txt); border-left: 2px solid var(--cyn);
+    padding: 7px 11px; background: rgba(63,200,255,.05); border-radius: 0 5px 5px 0; }
+  .msg.user { align-self: flex-end; background: var(--panel2); border: 1px solid var(--bd2);
+    padding: 7px 11px; border-radius: 6px; color: var(--txt); }
+  .msg.auto { align-self: flex-start; color: var(--dim); font: 400 11px var(--mono); border-left: 2px solid var(--bd2);
+    padding: 5px 10px; background: transparent; }
+  .msg.auto.up { color: #3f9c73; border-left-color: #1e3a2c; }
+  .msg.auto.down { color: #b0605c; border-left-color: #4a2323; }
+  .msg.auto.warn { color: #b0954f; border-left-color: #4a3d1f; }
+  .msg .who { font: 700 8.5px var(--mono); letter-spacing: .12em; color: var(--cyn); display: block; margin-bottom: 3px; }
+  .msg.typing { color: var(--dim); font-style: italic; }
+  .msg .actbtn { margin-top: 8px; }
+  #chatForm { display: flex; gap: 7px; padding: 10px; border-top: 1px solid var(--bd); flex-shrink: 0; background: var(--panel); }
+  #chatIn { flex: 1; background: var(--panel2); border: 1px solid var(--bd2); color: var(--txt);
+    padding: 9px 11px; border-radius: 5px; font: inherit; font-size: 12.5px; resize: none; max-height: 96px; }
+  #chatIn:focus { outline: none; border-color: var(--cyn); }
+  #chatSuggest { display: flex; gap: 5px; flex-wrap: wrap; padding: 0 10px 8px; flex-shrink: 0; }
+  #chatSuggest button { background: transparent; border: 1px solid var(--bd2); color: var(--dim);
+    font: 600 9.5px var(--mono); padding: 3px 7px; border-radius: 10px; cursor: pointer; }
+  #chatSuggest button:hover { color: var(--cyn); border-color: #1e3a4a; }
+  #engineTag { font: 400 8.5px var(--mono); color: var(--dim2); }
+
+  #footer { padding: 5px 18px; color: var(--dim2); font: 400 9.5px var(--mono); border-top: 1px solid var(--bd);
+    display: flex; justify-content: space-between; flex-shrink: 0; }
 </style>
 </head>
 <body>
-<div id="scanlines"></div>
 <div id="app">
 
   <div id="hdr">
@@ -217,23 +219,18 @@
     </div>
     <div id="heroStats">
       <div class="hstat"><span class="l">EQUITY</span><span class="v num" id="hEq">--</span></div>
-      <div class="hstat"><span class="l">DAY P&amp;L</span><span class="v num" id="hDay">--</span></div>
-      <div class="hstat"><span class="l">UNREALIZED</span><span class="v num" id="hU">--</span></div>
+      <div class="hstat big"><span class="l">DAY P&amp;L</span><span class="v num" id="hDay">--</span></div>
+      <div class="hstat big"><span class="l">UNREALIZED</span><span class="v num" id="hU">--</span>
+        <span class="bar"><i id="hUBar"></i></span></div>
+      <div class="hstat"><span class="l">WIN / LOSE</span><span class="v num sm" id="hWL">--</span></div>
       <div class="hstat"><span class="l">POSITIONS</span><span class="v num sm" id="hPos">--</span></div>
     </div>
   </div>
 
-  <div id="hero2">
-    <div id="heroChartWrap">
-      <span class="tag">LIVE EQUITY CURVE</span>
-      <span class="lastval num" id="eqLastVal"></span>
-      <div id="eqChart"></div>
-    </div>
-    <div id="narrateWrap">
-      <div id="narrateHead"><span class="radar"></span>FRIDAY LIVE<span class="eq"><i></i><i></i><i></i><i></i></span></div>
-      <div id="narrateLine">booting up…</div>
-      <div id="narrateHist"></div>
-    </div>
+  <div id="eqStrip">
+    <span class="tag">LIVE EQUITY CURVE</span>
+    <span class="lastval num" id="eqLastVal"></span>
+    <div id="eqChart"></div>
   </div>
 
   <div class="banner halt" id="killBanner">⛔ KILL-SWITCH ACTIVE — max drawdown tripped. No new trades until manual bot restart.</div>
@@ -248,34 +245,80 @@
     <input class="riskin" id="riskIn" type="number" min="0.05" max="15" step="0.05">
     <button class="btn" id="btnRisk">APPLY</button>
     <span id="cmdStatus"></span>
-    <span style="margin-left:auto; color:var(--dim); font-size:10px; font-family:var(--mono);" id="modeTag"></span>
+    <span style="margin-left:auto; color:var(--dim); font: 400 10px var(--mono);" id="modeTag"></span>
   </div>
 
   <div id="main">
-    <div class="col" id="colPositions">
-      <div class="hd"><span class="t">OPEN POSITIONS</span><span class="r" id="posCount">0</span></div>
-      <div class="bd" id="positions"><div class="empty">No open positions.</div></div>
+    <!-- left: positions + trade feed -->
+    <div class="colstack">
+      <div class="col" style="flex:1.15">
+        <div class="hd"><span class="t">OPEN POSITIONS</span><span class="r" id="posCount">0</span></div>
+        <div class="bd" id="positions"><div class="empty">No open positions.</div></div>
+      </div>
+      <div class="col" style="flex:1">
+        <div class="hd"><span class="t">ORDER FLOW — BUY / SELL</span><span class="r" id="tradeUpd"></span></div>
+        <div class="bd" id="trades"><div class="empty">No trades yet.</div></div>
+      </div>
     </div>
 
-    <div class="col" id="colResearch">
-      <div class="hd"><span class="t" style="display:flex; align-items:center; gap:8px;"><span class="radar"></span>LIVE RESEARCH — WHAT IT'S LOOKING AT</span><span class="r" id="researchUpd">--</span></div>
-      <div class="bd" id="research"><div class="empty">Waiting for the bot's first scan…</div></div>
+    <!-- centre: globe + research -->
+    <div class="colstack">
+      <div class="col" id="globeCol">
+        <div class="hd">
+          <span class="t"><span class="radar"></span>GLOBAL ORDER ROUTING</span>
+          <span class="r" id="globeStatus">--</span>
+        </div>
+        <div id="globeWrap">
+          <canvas id="globeCanvas"></canvas>
+          <div id="globeTools">
+            <button class="btn cyn sm" id="btnSetLoc">📍 SET MY LOCATION</button>
+          </div>
+          <div id="globeLegend">
+            <span><i style="background:#f0a93b"></i>YOU</span>
+            <span><i style="background:#1fdb85"></i>ACTIVE VENUE</span>
+            <span><i style="background:#3fc8ff"></i>VENUE</span>
+          </div>
+          <div id="globeHint">drag to spin · scroll to zoom · click a venue for detail</div>
+        </div>
+      </div>
+      <div class="col" style="flex:1">
+        <div class="hd"><span class="t"><span class="radar"></span>LIVE RESEARCH</span><span class="r" id="researchUpd">--</span></div>
+        <div class="bd" id="research"><div class="empty">Waiting for the bot's first scan…</div></div>
+      </div>
     </div>
 
-    <div class="col" id="colTrades">
-      <div class="hd"><span class="t">BUY / SELL FEED</span><span class="r" id="tradeUpd"></span></div>
-      <div class="bd" id="trades"><div class="empty">No trades yet.</div></div>
+    <!-- right: FRIDAY -->
+    <div class="col" id="fridayCol">
+      <div class="hd">
+        <span class="t"><span class="radar"></span>FRIDAY</span>
+        <span class="r" id="engineTag"></span>
+      </div>
+      <div id="chatLog"></div>
+      <div id="chatSuggest">
+        <button data-q="what are my positions?">positions</button>
+        <button data-q="what are my stops and targets?">stops &amp; targets</button>
+        <button data-q="how am I doing today?">P&amp;L</button>
+        <button data-q="what are you thinking right now?">your read</button>
+        <button data-q="why aren't you trading?">why no trades</button>
+      </div>
+      <form id="chatForm">
+        <textarea id="chatIn" rows="1" placeholder="Talk to FRIDAY…"></textarea>
+        <button class="btn cyn" type="submit">SEND</button>
+      </form>
     </div>
   </div>
 
   <div id="footer">
-    <span id="footLeft">FRIDAY research desk</span>
+    <span id="footLeft">FRIDAY trading desk</span>
     <span id="footRight"></span>
   </div>
 </div>
 
+<script src="world.js"></script>
+<script src="globe.js"></script>
 <script>
 const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
 const fmtM = n => (typeof n !== "number" || isNaN(n)) ? "--" : n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const dp = n => Math.abs(n) >= 1000 ? 2 : Math.abs(n) >= 1 ? 4 : 5;
@@ -283,45 +326,87 @@ const fmtP = (n, d) => (typeof n !== "number" || isNaN(n)) ? "--" : n.toLocaleSt
 const cls = n => (typeof n !== "number") ? "" : n >= 0 ? "up" : "down";
 const sgn = n => (typeof n !== "number") ? "" : n > 0 ? "+" : n < 0 ? "-" : "";
 const ago = iso => { if (!iso) return ""; const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
-  return s < 60 ? `${s | 0}s` : s < 3600 ? `${(s / 60) | 0}m` : `${(s / 3600) | 0}h`; };
-const tShort = iso => { try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); } catch { return ""; } };
+  return s < 60 ? `${s|0}s` : s < 3600 ? `${(s/60)|0}m` : `${(s/3600)|0}h`; };
+const tShort = iso => { try { return new Date(iso).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" }); } catch { return ""; } };
 
-const SIGNAL_LABEL = {
-  market_structure: "STRUCT", support_resistance: "S/R", candlestick_pattern: "CANDLE",
-  volume_confirmation: "VOL", trend_filter: "TREND", momentum: "MOM", historical_regime: "HIST",
-};
-const DECISION_LABEL = {
-  opened: "TRADED", skipped: "SKIPPED", no_signal: "NO SIGNAL", holding: "HOLDING",
-  market_closed: "MARKET CLOSED", error: "ERROR",
-};
+const SIGNAL_LABEL = { market_structure:"STRUCT", support_resistance:"S/R", candlestick_pattern:"CANDLE",
+  volume_confirmation:"VOL", trend_filter:"TREND", momentum:"MOM", historical_regime:"HIST" };
+const DECISION_LABEL = { opened:"TRADED", skipped:"SKIPPED", no_signal:"NO SIGNAL", holding:"HOLDING",
+  market_closed:"MARKET CLOSED", error:"ERROR" };
 
-// Glowing sparkline: filled area + a stroke with a drop-shadow glow, drawn
-// in the position's own up/down color so the little chart actually reads
-// as "graphics" instead of a hairline.
+/* ============ venues: where each instrument actually gets routed ============ */
+const CITY = {
+  NASDAQ:    { lat: 40.7566, lon: -73.9863, label: "NASDAQ · New York" },
+  NYSE:      { lat: 40.7069, lon: -74.0113, label: "NYSE · New York" },
+  LONDON:    { lat: 51.5074, lon:  -0.1278, label: "LONDON · GBP desk" },
+  FRANKFURT: { lat: 50.1109, lon:   8.6821, label: "FRANKFURT · EUR desk" },
+  TOKYO:     { lat: 35.6762, lon: 139.6503, label: "TOKYO · JPY desk" },
+  ZURICH:    { lat: 47.3769, lon:   8.5417, label: "ZURICH · CHF desk" },
+  SYDNEY:    { lat: -33.8688, lon: 151.2093, label: "SYDNEY · AUD desk" },
+  TORONTO:   { lat: 43.6532, lon: -79.3832, label: "TORONTO · CAD desk" },
+  WELLINGTON:{ lat: -41.2866, lon: 174.7756, label: "WELLINGTON · NZD desk" },
+};
+const SYMBOL_VENUE = {
+  AAPL:"NASDAQ", MSFT:"NASDAQ", NVDA:"NASDAQ", AMZN:"NASDAQ", GOOGL:"NASDAQ", META:"NASDAQ", QQQ:"NASDAQ",
+  SPY:"NYSE",
+  "EUR.USD":"FRANKFURT", "GBP.USD":"LONDON", "USD.JPY":"TOKYO", "USD.CHF":"ZURICH",
+  "AUD.USD":"SYDNEY", "USD.CAD":"TORONTO", "NZD.USD":"WELLINGTON",
+};
+const venueOf = sym => SYMBOL_VENUE[sym] || "NYSE";
+
+/* Home location: best guess from the browser's timezone, overridable by
+   clicking the globe (kept in localStorage so it sticks). */
+const TZ_LOC = {
+  "America/New_York":[40.71,-74.01],"America/Chicago":[41.88,-87.63],"America/Denver":[39.74,-104.99],
+  "America/Phoenix":[33.45,-112.07],"America/Los_Angeles":[34.05,-118.24],"America/Vancouver":[49.28,-123.12],
+  "America/Toronto":[43.65,-79.38],"America/Edmonton":[53.55,-113.49],"America/Winnipeg":[49.90,-97.14],
+  "America/Halifax":[44.65,-63.58],"America/Sao_Paulo":[-23.55,-46.63],"America/Mexico_City":[19.43,-99.13],
+  "Europe/London":[51.51,-0.13],"Europe/Dublin":[53.35,-6.26],"Europe/Paris":[48.86,2.35],
+  "Europe/Berlin":[52.52,13.40],"Europe/Madrid":[40.42,-3.70],"Europe/Rome":[41.90,12.50],
+  "Europe/Amsterdam":[52.37,4.90],"Europe/Zurich":[47.37,8.54],"Europe/Stockholm":[59.33,18.07],
+  "Europe/Moscow":[55.76,37.62],"Europe/Warsaw":[52.23,21.01],"Europe/Lisbon":[38.72,-9.14],
+  "Asia/Dubai":[25.20,55.27],"Asia/Karachi":[24.86,67.01],"Asia/Kolkata":[19.08,72.88],
+  "Asia/Calcutta":[19.08,72.88],"Asia/Dhaka":[23.81,90.41],"Asia/Bangkok":[13.76,100.50],
+  "Asia/Singapore":[1.35,103.82],"Asia/Hong_Kong":[22.32,114.17],"Asia/Shanghai":[31.23,121.47],
+  "Asia/Tokyo":[35.68,139.69],"Asia/Seoul":[37.57,126.98],"Asia/Jakarta":[-6.21,106.85],
+  "Australia/Sydney":[-33.87,151.21],"Australia/Melbourne":[-37.81,144.96],"Australia/Perth":[-31.95,115.86],
+  "Pacific/Auckland":[-36.85,174.76],"Africa/Johannesburg":[-26.20,28.05],"Africa/Lagos":[6.52,3.38],
+  "Africa/Cairo":[30.04,31.24],
+};
+function defaultHome() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("friday.home") || "null");
+    if (saved && typeof saved.lat === "number") return saved;
+  } catch {}
+  let tz = ""; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch {}
+  const hit = TZ_LOC[tz];
+  return hit ? { lat: hit[0], lon: hit[1] } : { lat: 40.71, lon: -74.01 };
+}
+let HOME = defaultHome();
+
+/* ---------------- sparkline ---------------- */
 function sparkSvg(values, w, h, strokeClass) {
   if (!values || values.length < 2) return "";
-  const min = Math.min(...values), max = Math.max(...values);
-  const range = (max - min) || 1;
-  const coords = values.map((v, i) => [(i / (values.length - 1) * w), (h - (v - min) / range * h)]);
-  const ptsStr = coords.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
-  const areaD = `M0,${h} ` + coords.map(c => `L${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ") + ` L${w},${h} Z`;
+  const min = Math.min(...values), max = Math.max(...values), range = (max - min) || 1;
+  const co = values.map((v,i) => [i/(values.length-1)*w, h-(v-min)/range*h]);
+  const pts = co.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
+  const area = `M0,${h} ` + co.map(c => `L${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ") + ` L${w},${h} Z`;
   const c = strokeClass || "";
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
-    `<path d="${areaD}" fill="currentColor" opacity="0.15" class="${c}"/>` +
-    `<polyline points="${ptsStr}" fill="none" stroke="currentColor" stroke-width="1.75" class="${c}" style="filter:drop-shadow(0 0 3px currentColor)"/>` +
-    `</svg>`;
+    `<path d="${area}" fill="currentColor" opacity="0.15" class="${c}"/>` +
+    `<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.75" class="${c}" ` +
+    `style="filter:drop-shadow(0 0 3px currentColor)"/></svg>`;
 }
 
-/* ---------------- remote commands (safety controls) ---------------- */
+/* ---------------- commands ---------------- */
 async function sendCommand(type, params, label) {
   $("cmdStatus").textContent = "sending " + label + "…";
   try {
-    const res = await fetch("/api/command", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, params: params || {} }),
-    });
+    const res = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, params: params || {} }) });
     const j = await res.json();
-    $("cmdStatus").textContent = res.ok ? label + " queued — bot picks it up within a few seconds" : "error: " + (j.error || res.status);
+    $("cmdStatus").textContent = res.ok ? label + " queued — bot picks it up within a few seconds"
+                                        : "error: " + (j.error || res.status);
   } catch (e) { $("cmdStatus").textContent = "send failed: " + e.message; }
   setTimeout(() => { $("cmdStatus").textContent = ""; }, 6000);
 }
@@ -329,149 +414,194 @@ $("btnHalt").onclick = () => { if (confirm("HALT the bot? No new trades until it
 $("btnCloseAll").onclick = () => { if (confirm("Close ALL open positions at market?")) sendCommand("close_all", {}, "CLOSE ALL"); };
 $("btnPause").onclick = () => sendCommand("pause_scanning", {}, "PAUSE");
 $("btnResume").onclick = () => sendCommand("resume_scanning", {}, "RESUME");
-$("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (!isFinite(v)) return; sendCommand("set_risk", { pct: v }, "risk " + v + "%"); };
+$("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (isFinite(v)) sendCommand("set_risk", { pct: v }, "risk " + v + "%"); };
 
-/* ---------------- FRIDAY narration console ("Jarvis" feed) ---------------- */
-const narrationLog = [];
-function pushNarration(text, kind) {
-  // The scan result is identical minute after minute when every instrument is
-  // already held; repeating it verbatim buries the lines that actually matter.
-  const prev = narrationLog[narrationLog.length - 1];
-  if (prev && prev.text === text) { prev.repeat = (prev.repeat || 1) + 1; renderNarration(); return; }
-  narrationLog.push({ text, kind: kind || "" });
-  if (narrationLog.length > 40) narrationLog.shift();
-  renderNarration();
-}
-function renderNarration() {
-  const latest = narrationLog[narrationLog.length - 1];
-  if (!latest) return;
-  const lineEl = $("narrateLine");
-  const suffix = latest.repeat > 1 ? `  (x${latest.repeat})` : "";
-  if (lineEl.textContent === latest.text + suffix) return; // don't restart the typewriter for nothing
-  lineEl.textContent = latest.text + suffix;
-  lineEl.className = latest.kind || "";
-  // restart the typewriter/caret animation on every new line
-  lineEl.style.animation = "none";
-  void lineEl.offsetWidth;
-  lineEl.style.animation = "";
-  const hist = narrationLog.slice(0, -1).slice(-5).reverse();
-  $("narrateHist").innerHTML = hist.map(h => `<div class="nhist ${h.kind || ""}">${h.text}</div>`).join("");
-}
-pushNarration("FRIDAY online — waiting for the bot's first report…");
+/* ============================ FRIDAY chat ============================ */
+const chatHistory = [];            // {role, content} pairs sent to the model
+let chatBusy = false;
 
-let narrationSeenTrades = new Set();
-let narrationSeenScan = null;
-let narrationPrevConnected = null;
-function narrateFromTrades(recentTrades) {
+function addMsg(kind, text, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "msg " + kind + (opts.tone ? " " + opts.tone : "");
+  if (kind === "friday") el.innerHTML = `<span class="who">FRIDAY</span>${esc(text)}`;
+  else el.textContent = text;
+  if (opts.action) {
+    const b = document.createElement("button");
+    b.className = "btn cyn sm actbtn";
+    b.textContent = "CONFIRM: " + opts.action.label;
+    b.onclick = () => {
+      if (!confirm(opts.action.label + " — are you sure?")) return;
+      sendCommand(opts.action.type, opts.action.params, opts.action.label);
+      b.disabled = true; b.textContent = "SENT";
+    };
+    el.appendChild(b);
+  }
+  $("chatLog").appendChild(el);
+  $("chatLog").scrollTop = $("chatLog").scrollHeight;
+  return el;
+}
+
+// FRIDAY can propose a control action; it becomes a button the user must click.
+function parseAction(text) {
+  const m = text.match(/\[\[ACTION:([a-z_]+)(?::([^\]]+))?\]\]/i);
+  if (!m) return { clean: text, action: null };
+  const type = m[1].toLowerCase(), arg = (m[2] || "").trim();
+  const clean = text.replace(m[0], "").trim();
+  const map = {
+    pause_scanning: { type:"pause_scanning", params:{}, label:"PAUSE SCANNING" },
+    resume_scanning:{ type:"resume_scanning",params:{}, label:"RESUME SCANNING" },
+    halt:           { type:"halt",           params:{}, label:"HALT BOT" },
+    close_all:      { type:"close_all",      params:{}, label:"CLOSE ALL POSITIONS" },
+    close_position: { type:"close_position", params:{ symbol: arg.toUpperCase() }, label:"CLOSE " + arg.toUpperCase() },
+    set_risk:       { type:"set_risk",       params:{ pct: parseFloat(arg) }, label:"SET RISK " + arg + "%" },
+  };
+  return { clean, action: map[type] || null };
+}
+
+async function askFriday(question) {
+  if (chatBusy || !question.trim()) return;
+  chatBusy = true;
+  addMsg("user", question);
+  chatHistory.push({ role: "user", content: question });
+  const typing = addMsg("friday typing", "thinking…");
+  try {
+    const res = await fetch("/api/friday/chat", { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: chatHistory }) });
+    const j = await res.json();
+    typing.remove();
+    const { clean, action } = parseAction(j.reply || "");
+    addMsg("friday", clean || "(no reply)", { action });
+    chatHistory.push({ role: "assistant", content: j.reply || "" });
+    $("engineTag").textContent = j.engine === "claude" ? "conversational" : "built-in";
+    if (j.warning) addMsg("auto", "note: " + j.warning, { tone: "warn" });
+  } catch (e) {
+    typing.remove();
+    addMsg("friday", "Couldn't reach the desk service: " + e.message);
+  }
+  chatBusy = false;
+}
+
+$("chatForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = $("chatIn").value.trim();
+  if (!v) return;
+  $("chatIn").value = ""; $("chatIn").style.height = "auto";
+  askFriday(v);
+});
+$("chatIn").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("chatForm").requestSubmit(); }
+});
+$("chatIn").addEventListener("input", e => {
+  e.target.style.height = "auto"; e.target.style.height = Math.min(96, e.target.scrollHeight) + "px";
+});
+$("chatSuggest").querySelectorAll("button").forEach(b => b.onclick = () => askFriday(b.dataset.q));
+
+/* auto-narration: events land in the same panel FRIDAY talks in */
+let lastAutoText = null;
+function narrate(text, tone) {
+  if (text === lastAutoText) return;      // the scan line repeats verbatim otherwise
+  lastAutoText = text;
+  addMsg("auto", text, { tone });
+}
+addMsg("friday", "Desk is up. I'm watching the bot — ask me anything about positions, stops, targets or what it's doing.");
+
+let seenTradeKeys = new Set();
+let seenScanStamp = null;
+let prevConnState = null;
+function narrateTrades(recentTrades) {
   for (const t of (recentTrades || [])) {
     const key = `${t.t}|${t.symbol}|${t.status}|${t.quantity}`;
-    if (narrationSeenTrades.has(key)) continue;
-    narrationSeenTrades.add(key);
-    if (firstState) continue; // don't narrate history as breaking news on first load
+    if (seenTradeKeys.has(key)) continue;
+    seenTradeKeys.add(key);
+    if (firstState) continue;                  // don't replay history as news
     const dir = String(t.direction || "").toUpperCase();
     const short = dir.includes("SELL") || dir.includes("SHORT") || dir === "BEAR";
-    const sideWord = short ? "SHORT" : "LONG";
     if (t.status === "opened") {
-      pushNarration(`Opened ${sideWord} ${t.quantity} ${t.display || t.symbol} @ ${t.entry} — stop ${t.stop}, target ${t.target}.`, short ? "down" : "up");
+      const v = CITY[venueOf(t.symbol)];
+      narrate(`${short ? "SHORT" : "LONG"} ${t.quantity} ${t.display || t.symbol} @ ${t.entry} → routed to ${v ? v.label.split(" · ")[0] : "market"} · stop ${t.stop} / target ${t.target}`, short ? "down" : "up");
+      fireArc(t.symbol, short ? "#ff5b56" : "#1fdb85");
     } else if (t.status === "skipped") {
-      pushNarration(`Signals lined up on ${t.display || t.symbol} but risk check blocked the trade: ${t.reason || "blocked"}.`, "warn");
+      narrate(`${t.display || t.symbol}: signals lined up but risk blocked it — ${t.reason || "blocked"}`, "warn");
     } else if (t.status === "error") {
-      pushNarration(`Order for ${t.display || t.symbol} failed to place — see app log.`, "warn");
+      narrate(`${t.display || t.symbol}: order failed to place`, "warn");
     }
   }
 }
-function narrateFromResearch(latest) {
+function narrateScan(latest) {
   const log = latest?.researchLog || [];
   if (!log.length) return;
   const stamp = latest.botTimestamp || latest.receivedAt;
-  if (stamp === narrationSeenScan) return;
-  const wasFirstScan = narrationSeenScan === null;
-  narrationSeenScan = stamp;
-  if (wasFirstScan || firstState) return;
+  if (stamp === seenScanStamp) return;
+  const first = seenScanStamp === null;
+  seenScanStamp = stamp;
+  if (first || firstState) return;
   const opened = log.filter(r => r.decision === "opened").length;
-  const holding = log.filter(r => r.decision === "holding").length;
-  // The most useful thing to say when nothing trades is *why* nothing traded.
-  if (!opened && holding === log.length && log.length) {
-    pushNarration(`Holding all ${log.length} instruments — no free slots, so no new entries until a stop or target closes one.`, "warn");
-    return;
+  const held = log.filter(r => r.decision === "holding").length;
+  if (!opened && held === log.length) {
+    narrate(`Holding all ${log.length} instruments — no free slots, so nothing new can open until a stop or target closes one.`, "warn");
+  } else {
+    narrate(`Scan done — ${log.length} reviewed, ${held} held, ${opened} opened.`, opened ? "up" : null);
   }
-  pushNarration(`Scan complete — ${log.length} reviewed, ${holding} held, ${opened} new position${opened === 1 ? "" : "s"} opened.`, opened ? "up" : "");
 }
-function narrateConnection(connected, stale) {
-  const state = stale ? "stale" : connected ? "connected" : "down";
-  if (state === narrationPrevConnected) return;
-  const first = narrationPrevConnected === null;
-  narrationPrevConnected = state;
+function narrateConn(connected, stale) {
+  const s = stale ? "stale" : connected ? "up" : "down";
+  const first = prevConnState === null;
+  if (s === prevConnState) return;
+  prevConnState = s;
   if (first) return;
-  if (state === "connected") pushNarration("Reconnected to IBKR — trading loop live.", "up");
-  else if (state === "down") pushNarration("Lost connection to IBKR — bot is attempting to reconnect.", "warn");
-  else if (state === "stale") pushNarration("No fresh report from the bot in a while — check it's still running.", "warn");
+  if (s === "up") narrate("Reconnected to IBKR — trading loop live.", "up");
+  else if (s === "down") narrate("Lost connection to IBKR — reconnecting.", "warn");
+  else narrate("No fresh report from the bot in a while.", "warn");
 }
 
-/* ---------------- live equity chart (self-contained SVG) ----------------
-   Deliberately hand-drawn rather than pulled from a charting CDN: the page
-   has to render on a locked-down browser with no third-party script access,
-   and a blank chart box is worse than a plain one. Same technique as the
-   position sparklines, which already render reliably.                     */
-function renderEquityChart(equityHistory) {
-  const host = $("eqChart");
-  const rows = (equityHistory || []).slice(-400).filter(p => typeof p.netLiquidation === "number");
-  const pts = rows.map(p => p.netLiquidation);
-  if (pts.length < 2) {
-    host.innerHTML = '<div class="chartempty">collecting equity data…</div>';
-    $("eqLastVal").textContent = "";
-    return;
-  }
-  const w = 1000, h = 110;
-  let min = Math.min(...pts), max = Math.max(...pts);
-  // A dead-flat equity curve would otherwise divide by zero and draw nothing;
-  // give it a nominal band so the line still renders across the middle.
-  if (max === min) { min -= 1; max += 1; }
-  const pad = (max - min) * 0.15;
-  min -= pad; max += pad;
-  const span = max - min;
-
-  const coords = pts.map((v, i) => [i / (pts.length - 1) * w, h - (v - min) / span * h]);
-  const line = coords.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
-  const area = `M0,${h} ` + coords.map(c => `L${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ") + ` L${w},${h} Z`;
-
-  const first = pts[0], last = pts[pts.length - 1];
-  const up = last >= first;
-  const stroke = up ? "#1fdb85" : "#ff5b56";
-  const gid = "eqgrad";
-  const grid = [0.25, 0.5, 0.75].map(f =>
-    `<line x1="0" y1="${(h * f).toFixed(1)}" x2="${w}" y2="${(h * f).toFixed(1)}" stroke="#1c222c" stroke-width="1" stroke-dasharray="3 5"/>`
-  ).join("");
-  const lastPt = coords[coords.length - 1];
-
-  host.innerHTML =
-    `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
-      `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">` +
-        `<stop offset="0%" stop-color="${stroke}" stop-opacity="0.38"/>` +
-        `<stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>` +
-      `</linearGradient></defs>` +
-      grid +
-      `<path d="${area}" fill="url(#${gid})"/>` +
-      `<polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="2" ` +
-        `vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 4px ${stroke})"/>` +
-      `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="3" fill="${stroke}" ` +
-        `style="filter:drop-shadow(0 0 5px ${stroke})"/>` +
-    `</svg>`;
-
-  const delta = last - first;
-  const el = $("eqLastVal");
-  el.textContent = `${fmtM(last)}  ${delta >= 0 ? "+" : "-"}${fmtM(Math.abs(delta))}`;
-  el.className = "lastval num " + (up ? "up" : "down");
+/* ============================ globe ============================ */
+const globe = FridayGlobe.create($("globeCanvas"));
+function rebuildMarkers() {
+  const used = new Set(Object.values(SYMBOL_VENUE));
+  const markers = Array.from(used).map(k => ({ key: k, lat: CITY[k].lat, lon: CITY[k].lon, label: CITY[k].label, kind: "venue" }));
+  markers.push({ key: "HOME", lat: HOME.lat, lon: HOME.lon, label: "YOU", kind: "home" });
+  globe.setMarkers(markers);
 }
+rebuildMarkers();
+globe.focus(HOME.lat, HOME.lon);
+
+function fireArc(symbol, color) {
+  const v = CITY[venueOf(symbol)];
+  if (!v) return;
+  globe.addArc(HOME, { lat: v.lat, lon: v.lon }, { color });
+}
+
+globe.on("markerclick", m => {
+  if (m.kind === "home") { narrate("That's you — every order routes out from here."); return; }
+  const here = lastPositions.filter(p => venueOf(p.symbol) === m.key);
+  if (!here.length) { narrate(`${m.label}: no open position routed there right now.`); return; }
+  const lines = here.map(p => {
+    const q = quotesCache[p.symbol];
+    const last = (q && typeof q.price === "number") ? q.price : p.marketPrice;
+    const pnl = (typeof p.avgCost === "number" && typeof last === "number") ? (last - p.avgCost) * p.quantity : p.unrealizedPnl;
+    const o = latestOpenedBySymbol(lastRecentTrades)[p.symbol] || {};
+    return `${p.display || p.symbol} ${p.quantity >= 0 ? "LONG" : "SHORT"} ${Math.abs(p.quantity)} — P&L ${sgn(pnl)}${fmtM(Math.abs(pnl))}, stop ${o.stop ?? "n/a"} / target ${o.target ?? "n/a"}`;
+  });
+  narrate(`${m.label}\n` + lines.join("\n"));
+});
+globe.on("surfaceclick", ll => {
+  if (!placing) return;
+  HOME = { lat: +ll.lat.toFixed(2), lon: +ll.lon.toFixed(2) };
+  try { localStorage.setItem("friday.home", JSON.stringify(HOME)); } catch {}
+  placing = false; globe.setPlacing(false);
+  $("btnSetLoc").textContent = "📍 SET MY LOCATION";
+  rebuildMarkers();
+  narrate(`Home set to ${HOME.lat}, ${HOME.lon} — order routes will draw from there.`);
+});
+let placing = false;
+$("btnSetLoc").onclick = () => {
+  placing = !placing; globe.setPlacing(placing);
+  $("btnSetLoc").textContent = placing ? "CLICK THE GLOBE…" : "📍 SET MY LOCATION";
+};
 
 /* ---------------- positions ---------------- */
 const prevPosPnl = {};
 let quotesCache = {};
-
-// Every entry the bot has ever opened, indexed by symbol -> most recent
-// {t, stop, target} -- lets a position card show what its own bracket order
-// is actually targeting instead of just quantity/avgCost. recentTrades is
-// capped (MAX_TRADES=500 server-side) so "most recent" is cheap to find.
 function latestOpenedBySymbol(recentTrades) {
   const out = {};
   for (const t of (recentTrades || [])) {
@@ -482,99 +612,100 @@ function latestOpenedBySymbol(recentTrades) {
   return out;
 }
 
-// Returns the summed live unrealized P&L across the cards it just drew, so
-// the header can show a figure that moves with the websocket ticks instead of
-// whatever the bot last reported.
+// Returns {total, wins, losses} across the cards it drew, so the header can
+// show figures that move with live ticks rather than the last bot report.
 function renderPositions(positions, recentTrades) {
   $("posCount").textContent = positions.length + (positions.length === 1 ? " position" : " positions");
   $("hPos").textContent = positions.length;
   const host = $("positions");
-  if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return 0; }
+  if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return null; }
   const openedMap = latestOpenedBySymbol(recentTrades);
-  const seen = new Set();
-  const nowMs = Date.now();
-  let livePnlTotal = 0;
-  let livePnlKnown = false;
+  const seen = new Set(); const nowMs = Date.now();
+  let total = 0, wins = 0, losses = 0, known = false;
+
   host.innerHTML = positions.map(p => {
     seen.add(p.symbol);
     const isFx = p.secType === "CASH";
     const d2 = isFx ? (p.symbol?.endsWith(".JPY") ? 3 : 5) : 2;
     const fn = v => (typeof v === "number" && isFinite(v)) ? v.toFixed(d2) : "--";
 
-    // Live tick from the Finnhub websocket, when we have one, takes over
-    // between the bot's own account-snapshot pushes so the card keeps
-    // moving second-to-second instead of jumping only every report cycle.
     const q = quotesCache[p.symbol];
-    const tickIsFresh = q && q.t && (nowMs - new Date(q.t).getTime()) < 12_000;
-    const lastPrice = (tickIsFresh && typeof q.price === "number") ? q.price : p.marketPrice;
-    const qty = p.quantity;
-    const absQty = Math.abs(qty);
-    const haveCostBasis = typeof p.avgCost === "number" && absQty > 0;
-    const livePnl = (haveCostBasis && typeof lastPrice === "number")
-      ? (lastPrice - p.avgCost) * qty
-      : p.unrealizedPnl;
-    const pnl = typeof livePnl === "number" ? livePnl : p.unrealizedPnl;
-    if (typeof pnl === "number" && isFinite(pnl)) { livePnlTotal += pnl; livePnlKnown = true; }
-    const costBasis = haveCostBasis ? p.avgCost * absQty : null;
-    const mktValue = (typeof lastPrice === "number") ? lastPrice * absQty : null;
-    const pnlPct = (costBasis && costBasis !== 0) ? (pnl / costBasis) * 100 : null;
+    const fresh = q && q.t && (nowMs - new Date(q.t).getTime()) < 12000;
+    const last = (fresh && typeof q.price === "number") ? q.price : p.marketPrice;
+    const qty = p.quantity, absQty = Math.abs(qty);
+    const haveCost = typeof p.avgCost === "number" && absQty > 0;
+    const pnl = (haveCost && typeof last === "number") ? (last - p.avgCost) * qty : p.unrealizedPnl;
+    if (typeof pnl === "number" && isFinite(pnl)) { total += pnl; known = true; pnl >= 0 ? wins++ : losses++; }
+    const cost = haveCost ? p.avgCost * absQty : null;
+    const value = (typeof last === "number") ? last * absQty : null;
+    const pct = (cost && cost !== 0) ? (pnl / cost) * 100 : null;
 
     const prev = prevPosPnl[p.symbol];
-    const flash = typeof prev === "number" && typeof pnl === "number" && Math.abs(pnl - prev) > 0.005 ? (pnl > prev ? "flashu" : "flashd") : "";
+    const flash = typeof prev === "number" && typeof pnl === "number" && Math.abs(pnl - prev) > 0.005
+      ? (pnl > prev ? "flashu" : "flashd") : "";
     prevPosPnl[p.symbol] = pnl;
-    const spark = q?.spark;
-    const liveOn = q && q.live && tickIsFresh;
 
-    const opened = openedMap[p.symbol];
-    const detailLine = opened
-      ? `opened <b>${ago(opened.t)} ago</b> · stop <b>${opened.stop ?? "--"}</b> / tgt <b>${opened.target ?? "--"}</b>`
-      : `avg cost <b>${fn(p.avgCost)}</b>`;
+    const o = openedMap[p.symbol] || {};
+    // stop -> target ladder with the live price marked on it
+    let ladder = "";
+    const sp = parseFloat(o.stop), tg = parseFloat(o.target);
+    if (isFinite(sp) && isFinite(tg) && typeof last === "number") {
+      const lo = Math.min(sp, tg), hi = Math.max(sp, tg), span = (hi - lo) || 1;
+      const pos = Math.max(0, Math.min(100, ((last - lo) / span) * 100));
+      const entry = parseFloat(o.entry);
+      const epos = isFinite(entry) ? Math.max(0, Math.min(100, ((entry - lo) / span) * 100)) : null;
+      ladder = `<div class="ladder"><div class="track">` +
+        (epos != null ? `<i class="mk" style="left:${epos}%;background:var(--dim)"></i>` : "") +
+        `<i class="mk now ${cls(pnl)}" style="left:${pos}%;background:currentColor"></i></div>` +
+        `<div class="lbls"><span>stop ${o.stop}</span><span>now ${fn(last)}</span><span>tgt ${o.target}</span></div></div>`;
+    }
 
     return `<div class="pcard ${flash}">` +
-      `<div class="r1"><span><span class="sym">${p.display || p.symbol}</span>` +
+      `<div class="r1"><span><span class="sym">${esc(p.display || p.symbol)}</span>` +
       `<span class="dir ${qty >= 0 ? "long" : "short"}">${qty >= 0 ? "LONG" : "SHORT"} ${absQty.toLocaleString()}</span></span>` +
       `<span class="pnl ${cls(pnl)}">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</span></div>` +
-      `<div class="r1b"><span class="lastpx"><span class="livedot ${liveOn ? "on" : ""}"></span>LAST ${fn(lastPrice)}</span>` +
-      `<span class="pnlpct ${cls(pnlPct)}">${typeof pnlPct === "number" ? sgn(pnlPct) + fmtP(Math.abs(pnlPct), 2) + "%" : "--"}</span></div>` +
-      (spark ? sparkSvg(spark, 200, 34, cls(pnl)) : "") +
-      `<div class="r2"><span>AVG ${fn(p.avgCost)}</span><span>VALUE ${mktValue != null ? fmtM(mktValue) : "--"}</span><span>COST ${costBasis != null ? fmtM(costBasis) : "--"}</span></div>` +
-      `<div class="r3">${detailLine}</div>` +
-      `<button class="btn danger sm closebtn" data-sym="${p.symbol}">CLOSE</button></div>`;
+      `<div class="r1b"><span class="lastpx"><span class="livedot ${fresh && q.live ? "on" : ""}"></span>LAST ${fn(last)}</span>` +
+      `<span class="pnlpct ${cls(pct)}">${typeof pct === "number" ? sgn(pct) + fmtP(Math.abs(pct), 2) + "%" : "--"}</span></div>` +
+      (q?.spark ? sparkSvg(q.spark, 200, 30, cls(pnl)) : "") + ladder +
+      `<div class="r2"><span>AVG ${fn(p.avgCost)}</span><span>VAL ${value != null ? fmtM(value) : "--"}</span></div>` +
+      `<div class="r3">→ <b>${esc((CITY[venueOf(p.symbol)] || {}).label || "market")}</b>${o.t ? ` · opened <b>${ago(o.t)} ago</b>` : ""}</div>` +
+      `<button class="btn danger sm closebtn" data-sym="${esc(p.symbol)}">CLOSE</button></div>`;
   }).join("");
-  for (const sym of Object.keys(prevPosPnl)) if (!seen.has(sym)) delete prevPosPnl[sym];
+
+  for (const s of Object.keys(prevPosPnl)) if (!seen.has(s)) delete prevPosPnl[s];
   host.querySelectorAll("button[data-sym]").forEach(b => b.onclick = () => {
     if (confirm(`Close position ${b.dataset.sym} at market?`)) sendCommand("close_position", { symbol: b.dataset.sym }, "CLOSE " + b.dataset.sym);
   });
-  return livePnlKnown ? livePnlTotal : null;
+  globe.setActive(positions.map(p => venueOf(p.symbol)));
+  $("globeStatus").textContent = `${positions.length} live route${positions.length === 1 ? "" : "s"}`;
+  return known ? { total, wins, losses } : null;
 }
 
-/* ---------------- live research feed ---------------- */
+/* ---------------- research ---------------- */
 let lastResearchStamp = null;
 function renderResearch(latest) {
   const log = latest?.researchLog || [];
   const host = $("research");
   if (!log.length) { host.innerHTML = '<div class="empty">Waiting for the bot&#39;s first scan…</div>'; return; }
   const stamp = latest.botTimestamp || latest.receivedAt;
-  const isNewBatch = stamp !== lastResearchStamp;
+  const isNew = stamp !== lastResearchStamp;
   lastResearchStamp = stamp;
   $("researchUpd").textContent = "scan " + ago(stamp) + " ago · " + log.length + " instruments";
-
   host.innerHTML = log.map(r => {
-    const decision = r.decision || "no_signal";
+    const d = r.decision || "no_signal";
     const sigs = (r.signals || []).map(s =>
-      `<span class="sig ${s.direction}" title="${(SIGNAL_LABEL[s.name] || s.name)}: ${s.reason}">${SIGNAL_LABEL[s.name] || s.name}</span>`
-    ).join("");
-    return `<div class="rcard rc-${decision}${isNewBatch ? " rnew" : ""}">` +
-      `<div class="r1"><span class="sym">${r.display || r.symbol}</span>` +
+      `<span class="sig ${s.direction}" title="${esc((SIGNAL_LABEL[s.name]||s.name) + ": " + s.reason)}">${esc(SIGNAL_LABEL[s.name]||s.name)}</span>`).join("");
+    return `<div class="rcard rc-${d}${isNew ? " rnew" : ""}">` +
+      `<div class="r1"><span class="sym">${esc(r.display || r.symbol)}</span>` +
       `<span class="nm">${r.secType === "CASH" ? "FX" : "STK"}</span>` +
       (typeof r.price === "number" ? `<span class="px num">${fmtP(r.price)}</span>` : "") +
-      `<span class="badge ${decision}">${DECISION_LABEL[decision] || decision}</span></div>` +
+      `<span class="badge ${d}">${DECISION_LABEL[d] || d}</span></div>` +
       (sigs ? `<div class="sigs">${sigs}</div>` : "") +
-      `<div class="reason">${r.reason || ""}</div></div>`;
+      `<div class="reason">${esc(r.reason || "")}</div></div>`;
   }).join("");
 }
 
-/* ---------------- buy/sell trade feed ---------------- */
+/* ---------------- trade feed ---------------- */
 const seenTrades = new Set();
 let firstState = true;
 function renderTrades(recentTrades) {
@@ -587,152 +718,156 @@ function renderTrades(recentTrades) {
     const isNew = !firstState && !seenTrades.has(key);
     seenTrades.add(key);
     const dir = String(t.direction || "").toUpperCase();
-    const isBuy = dir.includes("BUY") || dir.includes("LONG");
-    const isSell = dir.includes("SELL") || dir.includes("SHORT");
-    const sideClass = isBuy ? "buy" : isSell ? "sell" : "";
-    return `<div class="lcard ${sideClass}${isNew ? " lnew" : ""}">` +
+    const buy = dir.includes("BUY") || dir.includes("LONG") || dir === "BULL";
+    const sell = dir.includes("SELL") || dir.includes("SHORT") || dir === "BEAR";
+    const v = CITY[venueOf(t.symbol)];
+    return `<div class="lcard ${buy ? "buy" : sell ? "sell" : ""}${isNew ? " lnew" : ""}">` +
       `<span class="time">${tShort(t.t)}</span>` +
-      `<span class="side">${dir || (t.status || "").toUpperCase()}</span><span class="sym">${t.display || t.symbol || ""}</span>` +
-      `<div class="meta">${t.status === "opened" ? `qty ${t.quantity ?? "--"} @ ${t.entry ?? "--"} · stop ${t.stop ?? "--"} / tgt ${t.target ?? "--"}` : (t.reason || t.status || "")}</div></div>`;
+      `<span class="side">${esc(dir || (t.status||"").toUpperCase())}</span><span class="sym">${esc(t.display || t.symbol || "")}</span>` +
+      `<div class="meta">${t.status === "opened"
+        ? `qty ${t.quantity ?? "--"} @ ${t.entry ?? "--"} · stop ${t.stop ?? "--"} / tgt ${t.target ?? "--"}`
+        : esc(t.reason || t.status || "")}</div>` +
+      (v ? `<div class="route">→ ${esc(v.label)}</div>` : "") + `</div>`;
   }).join("");
 }
 
-/* ---------------- main poll loop ---------------- */
-let lastPositions = [];
-let lastRecentTrades = [];
-const prevHeroVal = {};
-// Sets a hero-stat's text + base class, then -- if the value actually moved
-// since last poll -- forces a reflow and adds the flash class fresh so the
-// glow animation restarts every time, even on repeated same-direction moves.
-function setHeroStat(id, val, text, baseCls) {
+/* ---------------- equity curve ---------------- */
+function renderEquityChart(equityHistory) {
+  const host = $("eqChart");
+  const pts = (equityHistory || []).slice(-400).map(p => p.netLiquidation).filter(v => typeof v === "number");
+  if (pts.length < 2) { host.innerHTML = '<div class="chartempty">collecting equity data…</div>'; $("eqLastVal").textContent = ""; return; }
+  const w = 1000, h = 84;
+  let min = Math.min(...pts), max = Math.max(...pts);
+  if (max === min) { min -= 1; max += 1; }                 // flat curve would divide by zero
+  const pad = (max - min) * 0.18; min -= pad; max += pad;
+  const span = max - min;
+  const co = pts.map((v,i) => [i/(pts.length-1)*w, h-(v-min)/span*h]);
+  const line = co.map(c => `${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ");
+  const area = `M0,${h} ` + co.map(c => `L${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(" ") + ` L${w},${h} Z`;
+  const first = pts[0], last = pts[pts.length-1], up = last >= first;
+  const stroke = up ? "#1fdb85" : "#ff5b56";
+  const grid = [0.33, 0.66].map(f => `<line x1="0" y1="${(h*f).toFixed(1)}" x2="${w}" y2="${(h*f).toFixed(1)}" stroke="#1c222c" stroke-width="1" stroke-dasharray="3 6"/>`).join("");
+  const tip = co[co.length-1];
+  host.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
+    `<defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0%" stop-color="${stroke}" stop-opacity="0.42"/>` +
+    `<stop offset="100%" stop-color="${stroke}" stop-opacity="0"/></linearGradient></defs>` +
+    grid + `<path d="${area}" fill="url(#eg)"/>` +
+    `<polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="2" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 4px ${stroke})"/>` +
+    `<circle cx="${tip[0].toFixed(1)}" cy="${tip[1].toFixed(1)}" r="3" fill="${stroke}" style="filter:drop-shadow(0 0 6px ${stroke})"/></svg>`;
+  const d = last - first;
+  const el = $("eqLastVal");
+  el.textContent = `${fmtM(last)}   ${d >= 0 ? "+" : "-"}${fmtM(Math.abs(d))} session`;
+  el.className = "lastval num " + (up ? "up" : "down");
+}
+
+/* ---------------- animated hero numbers ----------------
+   Tween the displayed value instead of snapping it, so P&L reads as a live
+   instrument rather than a field that occasionally changes. */
+const tweens = {};
+function setStat(id, target, fmt, baseCls) {
   const el = $(id);
-  const prev = prevHeroVal[id];
-  const flash = (typeof prev === "number" && typeof val === "number" && Math.abs(val - prev) > 0.005)
-    ? (val > prev ? "flashu" : "flashd") : "";
-  prevHeroVal[id] = val;
-  el.textContent = text;
+  if (typeof target !== "number" || !isFinite(target)) { el.textContent = "--"; el.className = baseCls; return; }
+  const t = tweens[id] || (tweens[id] = { cur: target, to: target, raf: 0 });
+  t.to = target;
   el.className = baseCls;
-  if (flash) { void el.offsetWidth; el.classList.add(flash); }
+  if (t.raf) return;
+  const step = () => {
+    const diff = t.to - t.cur;
+    if (Math.abs(diff) < 0.005) { t.cur = t.to; el.textContent = fmt(t.cur); t.raf = 0; return; }
+    t.cur += diff * 0.18;                    // ease toward the target
+    el.textContent = fmt(t.cur);
+    t.raf = requestAnimationFrame(step);
+  };
+  t.raf = requestAnimationFrame(step);
+}
+const moneyFmt = v => sgn(v) + fmtM(Math.abs(v));
+
+let lastRealized = 0;
+function updateHeroPnl(stats) {
+  if (!stats) return;
+  const u = stats.total;
+  setStat("hU", u, moneyFmt, "v num " + cls(u));
+  setStat("hDay", u + (lastRealized || 0), moneyFmt, "v num " + cls(u + (lastRealized || 0)));
+  $("hWL").textContent = `${stats.wins}/${stats.losses}`;
+  $("hWL").className = "v num sm " + (stats.wins >= stats.losses ? "up" : "down");
+  const tot = stats.wins + stats.losses;
+  const bar = $("hUBar");
+  bar.style.width = tot ? (stats.wins / tot * 100).toFixed(0) + "%" : "0%";
+  bar.style.background = stats.wins >= stats.losses ? "var(--grn)" : "var(--red)";
 }
 
-let lastRealizedToday = 0;
-// Repaints the header P&L from the live per-position numbers. Called on every
-// quote tick as well as every state push, so these move with the market
-// rather than only when the bot next reports.
-function updateHeroPnl(livePnlTotal) {
-  if (typeof livePnlTotal !== "number") return;
-  setHeroStat("hU", livePnlTotal, sgn(livePnlTotal) + fmtM(Math.abs(livePnlTotal)), "v num " + cls(livePnlTotal));
-  const day = livePnlTotal + (lastRealizedToday || 0);
-  setHeroStat("hDay", day, sgn(day) + fmtM(Math.abs(day)), "v num " + cls(day));
-}
-
+/* ---------------- state plumbing ---------------- */
+let lastPositions = [], lastRecentTrades = [];
 function applyState(state) {
   const l = state.latest;
   if (l) {
-    const stale = state.lastReportAt && (Date.now() - new Date(state.lastReportAt) > 5 * 60_000);
+    const stale = state.lastReportAt && (Date.now() - new Date(state.lastReportAt) > 5*60000);
     $("statusDot").className = "dot " + (l.connected && !stale ? "live" : "bad");
     $("statusSub").textContent = (stale ? "STALE" : l.connected ? "LIVE" : "DOWN") + " · " +
       (l.mode || "").toUpperCase() + " · report " + ago(state.lastReportAt) + " ago";
     $("modeTag").textContent = (l.accountId || "") + " · " + (l.mode || "").toUpperCase();
-    narrateConnection(l.connected, stale);
+    narrateConn(l.connected, stale);
 
-    setHeroStat("hEq", l.netLiquidation, fmtM(l.netLiquidation), "v num");
-    lastRealizedToday = l.realizedPnlToday || 0;
-
+    setStat("hEq", l.netLiquidation, v => fmtM(v), "v num");
+    lastRealized = l.realizedPnlToday || 0;
     $("killBanner").classList.toggle("show", !!l.killSwitchTripped);
     $("haltBanner").classList.toggle("show", !!l.dailyHalted && !l.killSwitchTripped);
     if (!$("riskIn").value && l.riskPerTradePct != null) $("riskIn").value = l.riskPerTradePct;
 
+    const wasFirst = firstState;
     lastPositions = l.positions || [];
     lastRecentTrades = state.recentTrades || [];
-    // Prefer the live per-position sum; fall back to whatever the bot
-    // reported if we somehow can't compute one.
-    const livePnl = renderPositions(lastPositions, lastRecentTrades);
-    updateHeroPnl(typeof livePnl === "number" ? livePnl : l.unrealizedPnl);
+    updateHeroPnl(renderPositions(lastPositions, lastRecentTrades));
     renderResearch(l);
-    narrateFromResearch(l);
+    narrateScan(l);
+    // On the very first paint, show where money is already committed by
+    // firing one arc per open position, staggered so they read individually.
+    if (wasFirst && lastPositions.length) {
+      lastPositions.forEach((p, i) => setTimeout(() =>
+        fireArc(p.symbol, p.quantity >= 0 ? "#1fdb85" : "#ff5b56"), i * 320));
+    }
   } else {
     $("statusDot").className = "dot bad"; $("statusSub").textContent = "no bot reports yet";
   }
-  narrateFromTrades(state.recentTrades);
+  narrateTrades(state.recentTrades);
   renderTrades(state.recentTrades);
   renderEquityChart(state.equityHistory);
   firstState = false;
   $("footRight").textContent = "updated " + new Date().toLocaleTimeString();
 }
 
-async function pollState() {
-  let state;
-  try {
-    const res = await fetch("/api/state");
-    if (!res.ok) throw 0;
-    state = await res.json();
-  } catch { $("statusDot").className = "dot bad"; $("statusSub").textContent = "OFFLINE"; return; }
-  applyState(state);
-}
-
-let quoteFeedLive = false;
-let streamLive = false;
+let streamLive = false, quoteFeedLive = false;
 function applyQuotes(j) {
   quotesCache = j.quotes || {};
   quoteFeedLive = !!j.wsConnected;
-  $("footLeft").textContent = "FRIDAY research desk · quotes " +
-    (quoteFeedLive ? "live (websocket)" : "delayed (rest fallback)") +
-    " · feed " + (streamLive ? "streaming" : "polling");
-  // Repaint positions and the header off every tick -- this is what makes
-  // P&L move continuously instead of stepping once per report.
-  if (lastPositions.length) {
-    const livePnl = renderPositions(lastPositions, lastRecentTrades);
-    updateHeroPnl(livePnl);
-  }
+  $("footLeft").textContent = "FRIDAY trading desk · quotes " +
+    (quoteFeedLive ? "live (websocket)" : "rest fallback") + " · feed " + (streamLive ? "streaming" : "polling");
+  if (lastPositions.length) updateHeroPnl(renderPositions(lastPositions, lastRecentTrades));
+}
+async function pollState() {
+  try { const r = await fetch("/api/state"); if (!r.ok) throw 0; applyState(await r.json()); }
+  catch { $("statusDot").className = "dot bad"; $("statusSub").textContent = "OFFLINE"; }
 }
 async function pollQuotes() {
-  try {
-    const res = await fetch("/api/quotes");
-    if (!res.ok) return;
-    applyQuotes(await res.json());
-  } catch {}
+  try { const r = await fetch("/api/quotes"); if (r.ok) applyQuotes(await r.json()); } catch {}
 }
 
-/* ---------------- transport: stream first, poll as fallback ----------------
-   EventSource gets state/quote pushes the instant the server has them. If the
-   stream can't be established (proxy stripping it, connection dropped), the
-   polling timers below take over automatically so the page never goes dark. */
+/* Stream first; polling stays armed as a fallback so the page never goes dark. */
 let pollTimers = [];
 function startPolling() {
   if (pollTimers.length) return;
-  pollTimers.push(setInterval(() => pollState().catch(() => {}), 2000));
-  pollTimers.push(setInterval(() => pollQuotes().catch(() => {}), 1500));
+  pollTimers.push(setInterval(() => pollState(), 2000));
+  pollTimers.push(setInterval(() => pollQuotes(), 1500));
 }
-function stopPolling() {
-  pollTimers.forEach(clearInterval);
-  pollTimers = [];
-}
-
+function stopPolling() { pollTimers.forEach(clearInterval); pollTimers = []; }
 function connectStream() {
-  let es;
-  try { es = new EventSource("/api/stream"); }
-  catch { startPolling(); return; }
-
-  es.addEventListener("state", e => {
-    streamLive = true; stopPolling();
-    try { applyState(JSON.parse(e.data)); } catch {}
-  });
-  es.addEventListener("quotes", e => {
-    streamLive = true; stopPolling();
-    try { applyQuotes(JSON.parse(e.data)); } catch {}
-  });
-  es.onerror = () => {
-    streamLive = false;
-    startPolling();          // keep the page alive while the stream is down
-    // EventSource retries on its own; nothing to do but let it.
-  };
+  let es; try { es = new EventSource("/api/stream"); } catch { startPolling(); return; }
+  es.addEventListener("state",  e => { streamLive = true; stopPolling(); try { applyState(JSON.parse(e.data)); } catch {} });
+  es.addEventListener("quotes", e => { streamLive = true; stopPolling(); try { applyQuotes(JSON.parse(e.data)); } catch {} });
+  es.onerror = () => { streamLive = false; startPolling(); };
 }
-
-// Paint immediately from a plain fetch, then hand over to the stream.
-pollState(); pollQuotes();
-connectStream();
-startPolling();  // cleared as soon as the first streamed event arrives
+pollState(); pollQuotes(); connectStream(); startPolling();
 </script>
 </body>
 </html>

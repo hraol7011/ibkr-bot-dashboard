@@ -385,6 +385,223 @@ app.post("/api/command", (req, res) => {
 });
 app.get("/api/command-log", (req, res) => res.json({ commands: store.commands.slice(-30).reverse() }));
 
+// ===========================================================================
+// FRIDAY -- the conversational layer over the bot's live state.
+//
+// Two paths on purpose:
+//   * With ANTHROPIC_API_KEY set, questions go to Claude with a full live
+//     snapshot of the desk as context -- that's what handles slang, follow-ups
+//     and open-ended "what are you thinking" style questions.
+//   * Without a key, a deterministic responder answers the factual questions
+//     (positions, stops, targets, P&L, why nothing is trading). Those answers
+//     are read straight off the same state the screen is drawing, so they're
+//     exact -- worth keeping even when the model is available as the fallback
+//     if the API call fails.
+// ===========================================================================
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const FRIDAY_MODEL = process.env.FRIDAY_MODEL || "claude-sonnet-4-5";
+
+const SYMBOL_VENUE = {
+  AAPL: "NASDAQ (New York)", MSFT: "NASDAQ (New York)", NVDA: "NASDAQ (New York)",
+  AMZN: "NASDAQ (New York)", GOOGL: "NASDAQ (New York)", META: "NASDAQ (New York)",
+  QQQ: "NASDAQ (New York)", SPY: "NYSE Arca (New York)",
+  "EUR.USD": "Frankfurt", "GBP.USD": "London", "USD.JPY": "Tokyo",
+  "USD.CHF": "Zurich", "AUD.USD": "Sydney", "USD.CAD": "Toronto", "NZD.USD": "Wellington",
+};
+
+function livePriceFor(sym) {
+  const q = quotes[sym];
+  return q && typeof q.price === "number" ? q.price : null;
+}
+
+// One structured view of the desk, shared by both the model path and the
+// deterministic path so they can never describe different worlds.
+function buildDeskState() {
+  const l = store.latest || {};
+  const trades = store.recentTrades || [];
+  const lastOpened = {};
+  for (const t of trades) {
+    if (t.status !== "opened") continue;
+    const prev = lastOpened[t.symbol];
+    if (!prev || new Date(t.t) > new Date(prev.t)) lastOpened[t.symbol] = t;
+  }
+
+  let totalUnrealized = 0, haveAny = false;
+  const positions = (l.positions || []).map(p => {
+    const last = livePriceFor(p.symbol) ?? p.marketPrice;
+    const qty = p.quantity, absQty = Math.abs(qty);
+    const pnl = (typeof p.avgCost === "number" && typeof last === "number")
+      ? (last - p.avgCost) * qty : p.unrealizedPnl;
+    if (typeof pnl === "number" && isFinite(pnl)) { totalUnrealized += pnl; haveAny = true; }
+    const o = lastOpened[p.symbol] || {};
+    const cost = typeof p.avgCost === "number" ? p.avgCost * absQty : null;
+    return {
+      symbol: p.symbol, name: p.display || p.symbol,
+      side: qty >= 0 ? "LONG" : "SHORT", quantity: absQty,
+      avgCost: p.avgCost, lastPrice: last,
+      unrealizedPnl: pnl,
+      unrealizedPct: cost ? (pnl / cost) * 100 : null,
+      stopLoss: o.stop ?? null, target: o.target ?? null,
+      entryPrice: o.entry ?? null, openedAt: o.t ?? null,
+      venue: SYMBOL_VENUE[p.symbol] || "SMART routing",
+      assetClass: p.secType === "CASH" ? "forex" : "equity",
+    };
+  });
+
+  const research = (l.researchLog || []).map(r => ({
+    symbol: r.symbol, decision: r.decision, reason: r.reason,
+    price: r.price ?? null,
+    signals: (r.signals || []).map(s => `${s.name}=${s.direction} (${s.reason})`),
+  }));
+  const decisionCounts = research.reduce((acc, r) => {
+    acc[r.decision] = (acc[r.decision] || 0) + 1; return acc;
+  }, {});
+
+  return {
+    account: {
+      id: l.accountId, mode: l.mode, connected: !!l.connected,
+      equity: l.netLiquidation ?? null,
+      unrealizedPnlLive: haveAny ? totalUnrealized : (l.unrealizedPnl ?? null),
+      realizedPnlToday: l.realizedPnlToday ?? null,
+      riskPerTradePct: l.riskPerTradePct ?? null,
+      scanningPaused: !!l.scanningPaused,
+      killSwitchTripped: !!l.killSwitchTripped,
+      dailyHalted: !!l.dailyHalted,
+      stockMarketOpen: !!l.withinStockTradingWindow,
+      forexMarketOpen: !!l.withinForexTradingWindow,
+      lastReportAt: store.lastReportAt,
+    },
+    positions,
+    positionCount: positions.length,
+    lastScan: { at: l.botTimestamp || l.receivedAt || null, instruments: research.length, decisionCounts },
+    research,
+    recentTrades: trades.slice(-15).reverse().map(t => ({
+      time: t.t, symbol: t.symbol, direction: t.direction, status: t.status,
+      quantity: t.quantity, entry: t.entry, stop: t.stop, target: t.target, reason: t.reason,
+    })),
+  };
+}
+
+const money = n => (typeof n === "number" && isFinite(n))
+  ? (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  : "n/a";
+
+// Deterministic answers, straight off buildDeskState(). Intentionally keyword
+// driven rather than clever -- it only has to cover the factual questions.
+function fridayFallback(question, d) {
+  const q = (question || "").toLowerCase();
+  const has = (...ws) => ws.some(w => q.includes(w));
+  const a = d.account;
+
+  if (!store.latest) return "I haven't had a report from the bot yet, so I can't see the desk. Check that it's running.";
+
+  if (has("stop", "target", "tp", "sl")) {
+    if (!d.positions.length) return "Nothing is open right now, so there are no stops or targets working.";
+    return "Working stops and targets:\n" + d.positions.map(p =>
+      `• ${p.name} ${p.side} ${p.quantity} — stop ${p.stopLoss ?? "n/a"}, target ${p.target ?? "n/a"} (last ${p.lastPrice ?? "n/a"})`
+    ).join("\n");
+  }
+  if (has("position", "holding", "open", "what am i in", "portfolio")) {
+    if (!d.positions.length) return "Flat — no open positions.";
+    return `${d.positionCount} open:\n` + d.positions.map(p =>
+      `• ${p.name} ${p.side} ${p.quantity} @ ${p.avgCost?.toFixed?.(4) ?? "?"} — now ${p.lastPrice ?? "?"}, P&L ${money(p.unrealizedPnl)} (${p.unrealizedPct != null ? p.unrealizedPct.toFixed(2) + "%" : "?"}) via ${p.venue}`
+    ).join("\n");
+  }
+  if (has("p&l", "pnl", "profit", "loss", "how am i doing", "made", "up or down", "money")) {
+    return `Equity ${money(a.equity)}. Unrealized ${money(a.unrealizedPnlLive)}, realized today ${money(a.realizedPnlToday)}, across ${d.positionCount} positions.`;
+  }
+  if (has("why", "no trade", "not trading", "nothing happening", "idle")) {
+    const held = d.lastScan.decisionCounts.holding || 0;
+    if (a.killSwitchTripped) return "Kill-switch is tripped — max drawdown was hit. No new trades until the bot is restarted.";
+    if (a.dailyHalted) return "Daily loss limit was hit, so no new entries until tomorrow.";
+    if (a.scanningPaused) return "Scanning is paused — hit RESUME SCANNING and it'll start looking again.";
+    if (held && held === d.lastScan.instruments) return `Every one of the ${held} instruments in the universe already has a position, so there's nothing left to buy. A stop or target has to close something before it can open anything new.`;
+    if (!a.stockMarketOpen && !a.forexMarketOpen) return "Both the stock and forex windows are closed right now, so it's only monitoring.";
+    return `Last scan looked at ${d.lastScan.instruments} instruments: ${JSON.stringify(d.lastScan.decisionCounts)}. Nothing cleared the confluence threshold.`;
+  }
+  if (has("risk", "size", "how much")) {
+    return `Risking ${a.riskPerTradePct}% of equity per trade. Kill-switch ${a.killSwitchTripped ? "TRIPPED" : "clear"}, daily halt ${a.dailyHalted ? "ON" : "off"}, scanning ${a.scanningPaused ? "PAUSED" : "running"}.`;
+  }
+  if (has("thinking", "doing", "research", "scan", "signal", "looking")) {
+    const top = d.research.slice(0, 6).map(r => `• ${r.symbol}: ${r.decision} — ${r.reason}`).join("\n");
+    return `Last scan covered ${d.lastScan.instruments} instruments.\n${top}`;
+  }
+  if (has("trade", "bought", "sold", "recent", "fill")) {
+    if (!d.recentTrades.length) return "No trades logged yet.";
+    return "Most recent:\n" + d.recentTrades.slice(0, 6).map(t =>
+      `• ${t.status} ${t.direction || ""} ${t.symbol} qty ${t.quantity ?? "?"} @ ${t.entry ?? "?"} (stop ${t.stop ?? "?"} / tgt ${t.target ?? "?"})`
+    ).join("\n");
+  }
+  if (has("hi", "hey", "hello", "yo", "sup", "you there")) {
+    return `Here. ${a.connected ? "Connected" : "Disconnected"}, ${d.positionCount} positions open, equity ${money(a.equity)}, unrealized ${money(a.unrealizedPnlLive)}. What do you want to know?`;
+  }
+  return `I can tell you about positions, stops and targets, P&L, recent trades, what the last scan found, or why nothing is trading. Right now: ${d.positionCount} open, equity ${money(a.equity)}, unrealized ${money(a.unrealizedPnlLive)}.`;
+}
+
+const FRIDAY_SYSTEM = `You are FRIDAY, the operator of an automated trading desk. You are talking to the desk's owner through a live dashboard.
+
+You will be given a JSON snapshot of the desk's real current state before each question. Answer ONLY from that snapshot. Never invent a number, a position, a stop, or a fill. If something isn't in the snapshot, say you can't see it.
+
+Voice: sharp, warm, concise. Like a trusted colleague on the desk, not a chatbot. Understand casual speech and slang and reply in kind. Skip pleasantries unless greeted. Never use bullet lists longer than the answer needs. Use plain numbers with $ and % - the owner reads them at a glance.
+
+Important context:
+- This is a PAPER trading account. Nothing here is real money.
+- You describe and explain what the bot is doing. You do NOT give investment advice or opinions on whether something is a good trade. If asked for a market call or advice, say plainly that's not your job and redirect to what the bot is actually doing.
+- The strategy is a confluence-of-signals engine: several signals vote bull/bear/neutral per instrument, and a trade only fires when enough agree. Signals include market structure, support/resistance, candlestick patterns, volume, a trend filter, RSI momentum, and a long-term historical regime read.
+- Every entry goes out as a bracket order, so each position carries its own stop and target from the moment it opens.
+
+If the owner asks you to DO something (pause scanning, resume, halt the bot, close a position, close everything, change risk %), do not claim you did it. Instead end your reply with a directive on its own final line, exactly:
+[[ACTION:pause_scanning]] or [[ACTION:resume_scanning]] or [[ACTION:halt]] or [[ACTION:close_all]] or [[ACTION:close_position:SYMBOL]] or [[ACTION:set_risk:NUMBER]]
+The dashboard turns that into a confirm button the owner must click. Mention that they'll need to confirm it.`;
+
+app.post("/api/friday/chat", async (req, res) => {
+  const { messages } = req.body || {};
+  const history = Array.isArray(messages) ? messages.slice(-12) : [];
+  const question = history.length ? String(history[history.length - 1].content || "") : "";
+  const desk = buildDeskState();
+
+  if (!ANTHROPIC_API_KEY) {
+    return res.json({ reply: fridayFallback(question, desk), engine: "builtin" });
+  }
+  try {
+    const convo = history.map(m => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: String(m.content || "").slice(0, 4000),
+    }));
+    // Attach the live snapshot to the newest user turn so the model always
+    // reasons over current numbers rather than whatever was true earlier.
+    if (convo.length) {
+      const i = convo.length - 1;
+      convo[i] = { ...convo[i],
+        content: `<desk_state>\n${JSON.stringify(desk)}\n</desk_state>\n\n${convo[i].content}` };
+    }
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: FRIDAY_MODEL, max_tokens: 900,
+        system: FRIDAY_SYSTEM, messages: convo,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      const detail = j?.error?.message || `HTTP ${r.status}`;
+      return res.json({ reply: fridayFallback(question, desk), engine: "builtin", warning: `Claude API: ${detail}` });
+    }
+    const text = (j.content || []).filter(c => c.type === "text").map(c => c.text).join("").trim();
+    res.json({ reply: text || fridayFallback(question, desk), engine: "claude" });
+  } catch (e) {
+    res.json({ reply: fridayFallback(question, desk), engine: "builtin", warning: String(e.message || e) });
+  }
+});
+
+// Everything FRIDAY knows, also exposed directly (handy for debugging).
+app.get("/api/friday/state", (req, res) => res.json(buildDeskState()));
+
 // ---- Diagnostics ----------------------------------------------------------
 app.get("/api/diag", async (req, res) => {
   const out = { keys: { finnhub: !!FINNHUB_KEY }, sources: {}, notes: [
