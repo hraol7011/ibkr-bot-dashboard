@@ -347,16 +347,31 @@
    ===================================================================== */
 const $ = id => document.getElementById(id);
 const GROUPS = {
-  INDICES: [["SPX","S&P 500"],["NDX","NASDAQ"],["DJI","DOW"],["VIX","VIX"],["DXY","DOLLAR IX"]],
-  STOCKS: [["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["AMZN","Amazon"],["GOOGL","Alphabet"],["META","Meta"],["SPY","S&P ETF"],["QQQ","NASDAQ ETF"]],
-  FX: [["EURUSD","EUR/USD"],["GBPUSD","GBP/USD"],["USDJPY","USD/JPY"],["USDCHF","USD/CHF"],["AUDUSD","AUD/USD"],["USDCAD","USD/CAD"],["NZDUSD","NZD/USD"]],
-  CRYPTO: [["BTC","Bitcoin"],["ETH","Ethereum"],["SOL","Solana"]],
-  COMMODITIES: [["WTI","WTI Crude"],["BRENT","Brent"],["GOLD","Gold"],["SILVER","Silver"],["NATGAS","Nat Gas"]],
+  INDICES: [["SPX","S&P 500"],["NDX","NASDAQ COMP"],["NDX100","NASDAQ 100"],["DJI","DOW"],["RUT","RUSSELL 2K"],
+    ["SOX","PHLX SEMI"],["VIX","VIX"],["DXY","DOLLAR IX"],["FTSE","FTSE 100"],["DAX","DAX"],["CAC","CAC 40"],
+    ["NIKKEI","NIKKEI 225"],["HSI","HANG SENG"],["SSEC","SHANGHAI"],["SENSEX","SENSEX"]],
+  STOCKS: [["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["GOOGL","Alphabet"],["AMZN","Amazon"],["META","Meta"],
+    ["AVGO","Broadcom"],["ORCL","Oracle"],["CRM","Salesforce"],["ADBE","Adobe"],["AMD","AMD"],["INTC","Intel"],["CSCO","Cisco"],["IBM","IBM"],["QCOM","Qualcomm"],
+    ["JPM","JPMorgan"],["BAC","BofA"],["WFC","Wells Fargo"],["C","Citigroup"],["GS","Goldman"],["MS","Morgan Stanley"],["V","Visa"],["MA","Mastercard"],["AXP","Amex"],["BRK.B","Berkshire B"],
+    ["UNH","UnitedHealth"],["JNJ","J&J"],["LLY","Eli Lilly"],["PFE","Pfizer"],["ABBV","AbbVie"],["MRK","Merck"],["TMO","Thermo Fisher"],["ABT","Abbott"],
+    ["TSLA","Tesla"],["HD","Home Depot"],["NKE","Nike"],["MCD","McDonald's"],["SBUX","Starbucks"],["BKNG","Booking"],["LOW","Lowe's"],["TGT","Target"],
+    ["WMT","Walmart"],["PG","P&G"],["KO","Coca-Cola"],["PEP","PepsiCo"],["COST","Costco"],["PM","Philip Morris"],
+    ["BA","Boeing"],["CAT","Caterpillar"],["GE","GE"],["HON","Honeywell"],["UPS","UPS"],["RTX","RTX"],["DE","Deere"],
+    ["XOM","Exxon"],["CVX","Chevron"],["COP","ConocoPhillips"],["SLB","Schlumberger"],["EOG","EOG Resources"],
+    ["NFLX","Netflix"],["DIS","Disney"],["CMCSA","Comcast"],["T","AT&T"],["VZ","Verizon"],
+    ["LIN","Linde"],["FCX","Freeport"],["NEM","Newmont"],["NEE","NextEra"],["DUK","Duke Energy"],["PLD","Prologis"],["AMT","American Tower"],
+    ["SPY","S&P ETF"],["QQQ","NASDAQ ETF"],["DIA","DOW ETF"],["IWM","Russell ETF"],["VTI","Total Mkt ETF"]],
+  FX: [["EURUSD","EUR/USD"],["GBPUSD","GBP/USD"],["USDJPY","USD/JPY"],["USDCHF","USD/CHF"],["AUDUSD","AUD/USD"],["USDCAD","USD/CAD"],["NZDUSD","NZD/USD"],
+    ["EURGBP","EUR/GBP"],["EURJPY","EUR/JPY"],["EURCHF","EUR/CHF"],["EURAUD","EUR/AUD"],["EURCAD","EUR/CAD"],["EURNZD","EUR/NZD"],
+    ["GBPJPY","GBP/JPY"],["GBPCHF","GBP/CHF"],["GBPAUD","GBP/AUD"],["GBPCAD","GBP/CAD"],["GBPNZD","GBP/NZD"],
+    ["AUDJPY","AUD/JPY"],["AUDNZD","AUD/NZD"],["AUDCAD","AUD/CAD"],["AUDCHF","AUD/CHF"],["CADJPY","CAD/JPY"],["CHFJPY","CHF/JPY"]],
+  CRYPTO: [["BTC","Bitcoin"],["ETH","Ethereum"],["SOL","Solana"],["XRP","XRP"],["DOGE","Dogecoin"],["ADA","Cardano"]],
+  COMMODITIES: [["WTI","WTI Crude"],["BRENT","Brent"],["GOLD","Gold"],["SILVER","Silver"],["NATGAS","Nat Gas"],["COPPER","Copper"]],
   RATES: [["US02Y","US 2Y"],["US10Y","US 10Y"],["US30Y","US 30Y"]],
 };
 const ALL_IDS = Object.values(GROUPS).flat().map(x => x[0]);
 const ID2NAME = Object.fromEntries(Object.values(GROUPS).flat());
-const FX_BOT = { EURUSD: "EUR.USD", GBPUSD: "GBP.USD", USDJPY: "USD.JPY", USDCHF: "USD.CHF", AUDUSD: "AUD.USD", USDCAD: "USD.CAD", NZDUSD: "NZD.USD" };
+const FX_BOT = Object.fromEntries(GROUPS.FX.map(([id]) => [id, id.slice(0, 3) + "." + id.slice(3)]));
 const BOT_IDS = { ...Object.fromEntries(GROUPS.STOCKS.map(s => [s[0], s[0]])), ...FX_BOT };
 const FUNCS = ["WEI","GP","DES","N","ECO","GLOBE","PORT","DIAG"];
 

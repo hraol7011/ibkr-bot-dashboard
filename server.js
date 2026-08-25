@@ -178,6 +178,7 @@ async function finnhub(pathq) {
 
 // FMP: budget ~220/day
 let fmpCount = 0, fmpDay = new Date().toDateString();
+let fmpIntradayBlocked = false; // set true after the first confirmed 403 on historical-chart (free plan is gated)
 async function fmp(pathq) {
   if (!FMP_KEY) throw new Error("no FMP_KEY");
   const today = new Date().toDateString();
@@ -264,23 +265,85 @@ async function stooqQuote(sym) {
 // ===========================================================================
 // Quote engine: server-side pollers fill one cache; clients read the cache.
 // ===========================================================================
-const STOCKS = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "SPY", "QQQ", "DIA"];
-const FX = [["EURUSD", "OANDA:EUR_USD", "EURUSD=X"], ["GBPUSD", "OANDA:GBP_USD", "GBPUSD=X"],
-  ["USDJPY", "OANDA:USD_JPY", "USDJPY=X"], ["USDCHF", "OANDA:USD_CHF", "USDCHF=X"],
-  ["AUDUSD", "OANDA:AUD_USD", "AUDUSD=X"], ["USDCAD", "OANDA:USD_CAD", "USDCAD=X"],
-  ["NZDUSD", "OANDA:NZD_USD", "NZDUSD=X"]];
-const CRYPTO = [["BTC", "BTC-USD"], ["ETH", "ETH-USD"], ["SOL", "SOL-USD"]];
-const YAHOO_MISC = [["SPX", "^GSPC", "S&P 500"], ["NDX", "^IXIC", "NASDAQ Comp"], ["DJI", "^DJI", "Dow Jones"],
-  ["VIX", "^VIX", "CBOE Volatility"], ["DXY", "DX-Y.NYB", "US Dollar Index"],
-  ["WTI", "CL=F", "Crude Oil WTI"], ["BRENT", "BZ=F", "Brent Crude"], ["GOLD", "GC=F", "Gold"],
-  ["SILVER", "SI=F", "Silver"], ["NATGAS", "NG=F", "Natural Gas"]];
+// Broad, sector-diversified default watchlist. This is deliberately NOT
+// "every US-listed equity" (6000+ tickers) -- there is no free quote feed
+// that can poll that many names live without blowing through rate limits.
+// Instead: a large curated set covering every major sector polls in the
+// background (below), AND the command bar / GP / DES screens accept ANY
+// valid ticker typed in and fetch it on demand (see runCommand() in
+// index.html + classify() below) -- exactly how Bloomberg itself works:
+// a bounded default monitor plus universal lookup-by-symbol.
+const STOCKS = [
+  // Technology
+  "AAPL","MSFT","NVDA","GOOGL","AMZN","META","AVGO","ORCL","CRM","ADBE","AMD","INTC","CSCO","IBM","QCOM",
+  // Financials
+  "JPM","BAC","WFC","C","GS","MS","V","MA","AXP","BRK.B",
+  // Healthcare
+  "UNH","JNJ","LLY","PFE","ABBV","MRK","TMO","ABT",
+  // Consumer discretionary
+  "TSLA","HD","NKE","MCD","SBUX","BKNG","LOW","TGT",
+  // Consumer staples
+  "WMT","PG","KO","PEP","COST","PM",
+  // Industrials
+  "BA","CAT","GE","HON","UPS","RTX","DE",
+  // Energy
+  "XOM","CVX","COP","SLB","EOG",
+  // Communication services
+  "NFLX","DIS","CMCSA","T","VZ",
+  // Materials / Utilities / Real estate
+  "LIN","FCX","NEM","NEE","DUK","PLD","AMT",
+  // Broad index ETFs
+  "SPY","QQQ","DIA","IWM","VTI",
+];
+// Majors + the common retail cross pairs -- effectively "all forex" for a
+// spot-FX terminal (exotics are on-demand via the command bar).
+const FX = [
+  ["EURUSD","OANDA:EUR_USD","EURUSD=X"], ["GBPUSD","OANDA:GBP_USD","GBPUSD=X"],
+  ["USDJPY","OANDA:USD_JPY","USDJPY=X"], ["USDCHF","OANDA:USD_CHF","USDCHF=X"],
+  ["AUDUSD","OANDA:AUD_USD","AUDUSD=X"], ["USDCAD","OANDA:USD_CAD","USDCAD=X"],
+  ["NZDUSD","OANDA:NZD_USD","NZDUSD=X"],
+  ["EURGBP","OANDA:EUR_GBP","EURGBP=X"], ["EURJPY","OANDA:EUR_JPY","EURJPY=X"],
+  ["EURCHF","OANDA:EUR_CHF","EURCHF=X"], ["EURAUD","OANDA:EUR_AUD","EURAUD=X"],
+  ["EURCAD","OANDA:EUR_CAD","EURCAD=X"], ["EURNZD","OANDA:EUR_NZD","EURNZD=X"],
+  ["GBPJPY","OANDA:GBP_JPY","GBPJPY=X"], ["GBPCHF","OANDA:GBP_CHF","GBPCHF=X"],
+  ["GBPAUD","OANDA:GBP_AUD","GBPAUD=X"], ["GBPCAD","OANDA:GBP_CAD","GBPCAD=X"],
+  ["GBPNZD","OANDA:GBP_NZD","GBPNZD=X"], ["AUDJPY","OANDA:AUD_JPY","AUDJPY=X"],
+  ["AUDNZD","OANDA:AUD_NZD","AUDNZD=X"], ["AUDCAD","OANDA:AUD_CAD","AUDCAD=X"],
+  ["AUDCHF","OANDA:AUD_CHF","AUDCHF=X"], ["CADJPY","OANDA:CAD_JPY","CADJPY=X"],
+  ["CHFJPY","OANDA:CHF_JPY","CHFJPY=X"],
+];
+const CRYPTO = [["BTC","BTC-USD"],["ETH","ETH-USD"],["SOL","SOL-USD"],["XRP","XRP-USD"],["DOGE","DOGE-USD"],["ADA","ADA-USD"]];
+const YAHOO_MISC = [
+  // US indices
+  ["SPX","^GSPC","S&P 500"], ["NDX","^IXIC","NASDAQ Comp"], ["NDX100","^NDX","NASDAQ 100"],
+  ["DJI","^DJI","Dow Jones"], ["RUT","^RUT","Russell 2000"], ["SOX","^SOX","Philly Semiconductor"],
+  ["VIX","^VIX","CBOE Volatility"], ["DXY","DX-Y.NYB","US Dollar Index"],
+  // Global indices
+  ["FTSE","^FTSE","FTSE 100"], ["DAX","^GDAXI","DAX"], ["CAC","^FCHI","CAC 40"],
+  ["NIKKEI","^N225","Nikkei 225"], ["HSI","^HSI","Hang Seng"], ["SSEC","000001.SS","Shanghai Comp"],
+  ["SENSEX","^BSESN","BSE Sensex"],
+  // Commodities
+  ["WTI","CL=F","Crude Oil WTI"], ["BRENT","BZ=F","Brent Crude"], ["GOLD","GC=F","Gold"],
+  ["SILVER","SI=F","Silver"], ["NATGAS","NG=F","Natural Gas"], ["COPPER","HG=F","Copper"],
+];
 const STOOQ_FALLBACK = { SPX: "^spx", DJI: "^dji", NDX: "^ndq", WTI: "cl.f", BRENT: "cb.f", GOLD: "gc.f", SILVER: "si.f", NATGAS: "ng.f", DXY: "dx.f" };
 
 const quotes = {};   // id -> {price, change, changePct, prevClose, spark, name, t, src}
 function setQuote(id, q) { quotes[id] = { ...quotes[id], ...q, t: new Date().toISOString() }; }
 
+// Both watchlists are now too large to poll in full every tick without
+// blowing Finnhub's free 60/min limit, so each poller only advances through
+// a rotating batch per call -- the full list still cycles every couple of
+// minutes, it's just spread out instead of firing 90+ requests at once.
+function makeCursor(size) { let i = 0; return () => { const s = i; i = (i + 1) % size; return s; }; }
+const stockCursor = makeCursor(STOCKS.length);
+const fxCursor = makeCursor(FX.length);
+const STOCK_BATCH = 6, FX_BATCH = 5;
+
 async function pollFinnhubStocks() {
-  for (const sym of STOCKS) {
+  const start = stockCursor();
+  for (let k = 0; k < Math.min(STOCK_BATCH, STOCKS.length); k++) {
+    const sym = STOCKS[(start + k) % STOCKS.length];
     try {
       const q = await finnhub(`/quote?symbol=${sym}`);
       if (typeof q.c === "number" && q.c > 0)
@@ -289,7 +352,9 @@ async function pollFinnhubStocks() {
   }
 }
 async function pollFinnhubFx() {
-  for (const [id, fhSym] of FX) {
+  const start = fxCursor();
+  for (let k = 0; k < Math.min(FX_BATCH, FX.length); k++) {
+    const [id, fhSym] = FX[(start + k) % FX.length];
     try {
       const q = await finnhub(`/quote?symbol=${encodeURIComponent(fhSym)}`);
       if (typeof q.c === "number" && q.c > 0)
@@ -368,8 +433,8 @@ async function pollTreasury() {
   } catch (e) { logSrcError("fmp", String(e.message || e)); }
 }
 
-setInterval(() => { pollFinnhubStocks().catch(() => {}); }, 20_000);
-setInterval(() => { pollFinnhubFx().catch(() => {}); }, 40_000);
+setInterval(() => { pollFinnhubStocks().catch(() => {}); }, 15_000);
+setInterval(() => { pollFinnhubFx().catch(() => {}); }, 20_000);
 setInterval(() => { pollCoinbase().catch(() => {}); }, 15_000);
 setInterval(() => { pollYahooMisc().catch(() => {}); }, 60_000);
 setInterval(() => { pollTreasury().catch(() => {}); }, 3600_000);
@@ -480,8 +545,19 @@ app.get("/api/chart", async (req, res) => {
     } else if (cls === "stock" || cls === "fx") {
       const fmpSym = cls === "fx" ? id : id;
       try {
-        if (FMP_INTERVAL[range]) {
-          const rows = await fmp(`/v3/historical-chart/${FMP_INTERVAL[range]}/${fmpSym}`);
+        // The intraday historical-chart endpoint is gated on FMP's paid
+        // plans -- once we've confirmed that with a real 403, stop wasting
+        // daily-budget calls on it and go straight to the Yahoo fallback.
+        if (FMP_INTERVAL[range] && fmpIntradayBlocked) {
+          throw new Error("fmp intraday plan-gated, skipping to yahoo");
+        } else if (FMP_INTERVAL[range]) {
+          let rows;
+          try {
+            rows = await fmp(`/v3/historical-chart/${FMP_INTERVAL[range]}/${fmpSym}`);
+          } catch (e) {
+            if (String(e.message || e).includes("HTTP 403")) fmpIntradayBlocked = true;
+            throw e;
+          }
           candles = (rows || []).map(r => ({ t: Math.floor(new Date(r.date).getTime() / 1000), o: r.open, h: r.high, l: r.low, c: r.close, v: r.volume || 0 })).reverse();
           if (range === "1d") {
             const cutoff = Date.now() / 1000 - 36 * 3600;
@@ -638,17 +714,36 @@ app.get("/api/calendar", async (req, res) => {
   const from = new Date().toISOString().slice(0, 10);
   const to = new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10);
   const data = { earnings: [], economic: [] };
+  const uni = new Set(STOCKS);
+  // FMP's earning_calendar / economic_calendar are gated on paid plans for
+  // many free keys -- try Finnhub's calendar endpoints too and merge, so
+  // the ECO screen still populates when FMP 403s on these.
   try {
     const e = await fmp(`/v3/earning_calendar?from=${from}&to=${to}`);
-    const uni = new Set(STOCKS);
     data.earnings = (Array.isArray(e) ? e : []).filter(x => uni.has(x.symbol)).slice(0, 20)
       .map(x => ({ symbol: x.symbol, date: x.date, epsEstimated: x.epsEstimated, time: x.time }));
   } catch {}
+  if (!data.earnings.length) {
+    try {
+      const e = await finnhub(`/calendar/earnings?from=${from}&to=${to}`);
+      const rows = e?.earningsCalendar || [];
+      data.earnings = rows.filter(x => uni.has(x.symbol)).slice(0, 20)
+        .map(x => ({ symbol: x.symbol, date: x.date, epsEstimated: x.epsEstimate, time: x.hour }));
+    } catch {}
+  }
   try {
     const ec = await fmp(`/v3/economic_calendar?from=${from}&to=${to}`);
     data.economic = (Array.isArray(ec) ? ec : []).filter(x => x.country === "US" && (x.impact === "High" || x.importance === "High" || x.impact === "Medium")).slice(0, 25)
       .map(x => ({ event: x.event, date: x.date, impact: x.impact || x.importance, estimate: x.estimate, previous: x.previous }));
   } catch {}
+  if (!data.economic.length) {
+    try {
+      const ec = await finnhub(`/calendar/economic?from=${from}&to=${to}`);
+      const rows = ec?.economicCalendar || [];
+      data.economic = rows.filter(x => x.country === "US" && (x.impact === "high" || x.impact === "medium")).slice(0, 25)
+        .map(x => ({ event: x.event, date: x.time, impact: x.impact, estimate: x.estimate, previous: x.prev }));
+    } catch {}
+  }
   calCache = { ts: Date.now(), data };
   res.json(data);
 });
@@ -662,7 +757,7 @@ app.get("/api/diag", async (req, res) => {
   };
   await Promise.allSettled([
     test("finnhub", () => finnhub("/quote?symbol=AAPL")),
-    test("fmp", () => fmp("/v3/historical-chart/5min/AAPL")),
+    test("fmp", () => fmp("/v3/quote/AAPL")),
     test("coinbase", () => coinbase("/products/BTC-USD/ticker")),
     test("yahoo", () => yfChart("AAPL", "1d", "5m")),
     test("stooq", () => stooqQuote("cl.f")),
