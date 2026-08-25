@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IBKR Bot Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #12161f; --border: #232a38; --text: #e6e9ef; --muted: #8b94a7;
+    --green: #3ecf8e; --red: #ef5757; --amber: #e8a33d; --blue: #4c8dff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--green); }
+  .dot.bad { background: var(--red); }
+  .mode-paper { color: var(--blue); border-color: var(--blue); }
+  .mode-live { color: var(--red); border-color: var(--red); }
+  main { padding: 20px 24px 60px; max-width: 1200px; margin: 0 auto; }
+  .banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-weight: 600; font-size: 14px; display: none; }
+  .banner.show { display: block; }
+  .banner.halt { background: rgba(239,87,87,0.12); border: 1px solid var(--red); color: var(--red); }
+  .banner.warn { background: rgba(232,163,61,0.12); border: 1px solid var(--amber); color: var(--amber); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .tile .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+  section h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .status-opened { color: var(--green); }
+  .status-skipped { color: var(--muted); }
+  .status-error { color: var(--red); }
+  .tablewrap { overflow-x: auto; }
+  #logTail { background: #05070b; border-radius: 6px; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #9fb0c9; max-height: 280px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .updated { font-size: 12px; color: var(--muted); }
+  canvas { max-height: 260px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="accountLine">IBKR Bot Dashboard</h1>
+    <div class="updated" id="updatedLine">waiting for first report from the bot...</div>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span class="badge" id="connBadge"><span class="dot" id="connDot"></span><span id="connText">unknown</span></span>
+    <span class="badge" id="modeBadge">--</span>
+  </div>
+</header>
+<main>
+  <div class="banner halt" id="killBanner">Kill-switch active: max drawdown limit tripped. No new trades until manual restart.</div>
+  <div class="banner warn" id="haltBanner">Daily loss limit hit: no new entries until tomorrow.</div>
+
+  <div class="tiles">
+    <div class="tile"><div class="label">Net Liquidation</div><div class="value" id="tileNetLiq">--</div></div>
+    <div class="tile"><div class="label">Unrealized P&amp;L</div><div class="value" id="tileUnrealized">--</div></div>
+    <div class="tile"><div class="label">Realized P&amp;L (today)</div><div class="value" id="tileRealized">--</div></div>
+    <div class="tile"><div class="label">Open Positions</div><div class="value" id="tilePositions">--</div></div>
+  </div>
+
+  <section>
+    <h2>Equity Curve</h2>
+    <canvas id="equityChart"></canvas>
+  </section>
+
+  <section>
+    <h2>Open Positions</h2>
+    <div class="tablewrap">
+      <table id="positionsTable">
+        <thead><tr><th>Symbol</th><th>Quantity</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="positionsEmpty">No open positions.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Recent Trade Decisions</h2>
+    <div class="tablewrap">
+      <table id="tradesTable">
+        <thead><tr><th>Time</th><th>Symbol</th><th>Dir</th><th>Status</th><th>Qty</th><th>Entry</th><th>Stop</th><th>Target</th><th>Signals</th><th>Reason</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="tradesEmpty">No trade decisions logged yet.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Live Log Tail</h2>
+    <div id="logTail">waiting for the bot to send a log tail...</div>
+  </section>
+</main>
+
+<script>
+const fmtMoney = (n) => (typeof n !== "number" || Number.isNaN(n)) ? "--" :
+  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+const pnlClass = (n) => (typeof n !== "number") ? "" : (n >= 0 ? "pos" : "neg");
+const fmtTime = (iso) => { try { return new Date(iso).toLocaleString(); } catch { return iso || "--"; } };
+
+let chart = null;
+function ensureChart() {
+  if (chart) return chart;
+  const ctx = document.getElementById("equityChart").getContext("2d");
+  chart = new Chart(ctx, {
+    type: "line",
+    data: { labels: [], datasets: [{
+      label: "Net Liquidation",
+      data: [],
+      borderColor: "#4c8dff",
+      backgroundColor: "rgba(76,141,255,0.08)",
+      fill: true,
+      tension: 0.15,
+      pointRadius: 0,
+      borderWidth: 2,
+    }]},
+    options: {
+      responsive: true,
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#8b94a7", maxTicksLimit: 8 }, grid: { color: "#232a38" } },
+        y: { ticks: { color: "#8b94a7" }, grid: { color: "#232a38" } },
+      },
+    },
+  });
+  return chart;
+}
+
+async function refresh() {
+  let state;
+  try {
+    const res = await fetch("/api/state");
+    if (!res.ok) throw new Error("bad response " + res.status);
+    state = await res.json();
+  } catch (e) {
+    document.getElementById("connText").textContent = "dashboard offline?";
+    document.getElementById("connDot").className = "dot bad";
+    return;
+  }
+
+  const latest = state.latest;
+  document.getElementById("updatedLine").textContent = state.lastReportAt
+    ? "Last report from bot: " + fmtTime(state.lastReportAt)
+    : "No reports received from the bot yet.";
+
+  if (latest) {
+    document.getElementById("accountLine").textContent =
+      "IBKR Bot Dashboard — " + (latest.accountId || "unknown account");
+
+    const connDot = document.getElementById("connDot");
+    const connText = document.getElementById("connText");
+    connDot.className = "dot " + (latest.connected ? "ok" : "bad");
+    connText.textContent = latest.connected ? "connected" : "disconnected";
+
+    const modeBadge = document.getElementById("modeBadge");
+    modeBadge.textContent = (latest.mode || "?").toUpperCase();
+    modeBadge.className = "badge " + (latest.mode === "live" ? "mode-live" : "mode-paper");
+
+    document.getElementById("killBanner").classList.toggle("show", !!latest.killSwitchTripped);
+    document.getElementById("haltBanner").classList.toggle("show", !!latest.dailyHalted && !latest.killSwitchTripped);
+
+    document.getElementById("tileNetLiq").textContent = fmtMoney(latest.netLiquidation);
+    const uEl = document.getElementById("tileUnrealized");
+    uEl.textContent = fmtMoney(latest.unrealizedPnl);
+    uEl.className = "value " + pnlClass(latest.unrealizedPnl);
+    const rEl = document.getElementById("tileRealized");
+    rEl.textContent = fmtMoney(latest.realizedPnlToday);
+    rEl.className = "value " + pnlClass(latest.realizedPnlToday);
+
+    const positions = latest.positions || [];
+    document.getElementById("tilePositions").textContent = positions.length;
+    const posBody = document.querySelector("#positionsTable tbody");
+    posBody.innerHTML = "";
+    document.getElementById("positionsEmpty").style.display = positions.length ? "none" : "block";
+    for (const p of positions) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td>" + p.symbol + "</td><td>" + p.quantity + "</td>";
+      posBody.appendChild(tr);
+    }
+  }
+
+  const eq = state.equityHistory || [];
+  if (eq.length) {
+    const c = ensureChart();
+    c.data.labels = eq.map(p => new Date(p.t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }));
+    c.data.datasets[0].data = eq.map(p => p.netLiquidation);
+    c.update();
+  }
+
+  const trades = (state.recentTrades || []).slice().reverse();
+  const tBody = document.querySelector("#tradesTable tbody");
+  tBody.innerHTML = "";
+  document.getElementById("tradesEmpty").style.display = trades.length ? "none" : "block";
+  for (const t of trades.slice(0, 100)) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = [
+      "<td>" + fmtTime(t.t) + "</td>",
+      "<td>" + (t.symbol || "") + "</td>",
+      "<td>" + (t.direction || "") + "</td>",
+      '<td class="status-' + (t.status || "") + '">' + (t.status || "") + "</td>",
+      "<td>" + (t.quantity ?? "") + "</td>",
+      "<td>" + (t.entry ?? "") + "</td>",
+      "<td>" + (t.stop ?? "") + "</td>",
+      "<td>" + (t.target ?? "") + "</td>",
+      "<td>" + (t.signals || "") + "</td>",
+      "<td>" + (t.reason || "") + "</td>",
+    ].join("");
+    tBody.appendChild(tr);
+  }
+
+  const logTail = state.logTail || [];
+  const logEl = document.getElementById("logTail");
+  logEl.textContent = logTail.length ? logTail.join("\n") : "No log lines received yet.";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+refresh();
+setInterval(refresh, 8000);
+</script>
+</body>
+</html>
