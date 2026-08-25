@@ -12,6 +12,7 @@ const express = require("express");
 const basicAuth = require("express-basic-auth");
 const fs = require("fs");
 const path = require("path");
+const Parser = require("rss-parser");
 
 const PORT = process.env.PORT || 3000;
 const REPORT_TOKEN = process.env.REPORT_TOKEN;
@@ -22,6 +23,40 @@ const STORE_PATH = path.join(DATA_DIR, "store.json");
 
 const MAX_EQUITY_POINTS = 3000;
 const MAX_TRADES = 500;
+
+// --- Live market news ticker: polled server-side from free, no-key-required
+// public financial RSS feeds, cached in memory, served to the dashboard via
+// GET /api/news. This is a nice-to-have, same fire-and-forget philosophy as
+// the bot's own dashboard reporter -- a feed timing out never breaks the app.
+const NEWS_FEEDS = [
+  { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex" },
+  { source: "MarketWatch", url: "http://feeds.marketwatch.com/marketwatch/topstories/" },
+  { source: "CNBC Top News", url: "https://www.cnbc.com/id/100003114/device/rss/rss.html" },
+  { source: "CNBC Markets", url: "https://www.cnbc.com/id/15839069/device/rss/rss.html" },
+];
+const NEWS_POLL_MS = 4 * 60 * 1000;
+let newsCache = [];
+const newsParser = new Parser({ timeout: 8000 });
+
+async function pollNews() {
+  const results = await Promise.allSettled(NEWS_FEEDS.map(f => newsParser.parseURL(f.url)));
+  const items = [];
+  results.forEach((r, i) => {
+    if (r.status !== "fulfilled") return;
+    for (const entry of (r.value.items || []).slice(0, 12)) {
+      items.push({
+        source: NEWS_FEEDS[i].source,
+        title: entry.title || "",
+        link: entry.link || "",
+        publishedAt: entry.isoDate || entry.pubDate || null,
+      });
+    }
+  });
+  items.sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+  if (items.length) newsCache = items.slice(0, 40);
+}
+pollNews().catch(() => {});
+setInterval(() => { pollNews().catch(() => {}); }, NEWS_POLL_MS);
 
 for (const [name, val] of Object.entries({ REPORT_TOKEN, DASHBOARD_USER, DASHBOARD_PASSWORD })) {
   if (!val) {
@@ -74,7 +109,8 @@ app.post("/api/report", (req, res) => {
     connected: !!body.connected,
     killSwitchTripped: !!body.killSwitchTripped,
     dailyHalted: !!body.dailyHalted,
-    withinTradingWindow: !!body.withinTradingWindow,
+    withinStockTradingWindow: !!body.withinStockTradingWindow,
+    withinForexTradingWindow: !!body.withinForexTradingWindow,
     netLiquidation: body.netLiquidation,
     unrealizedPnl: body.unrealizedPnl,
     realizedPnlToday: body.realizedPnlToday,
@@ -127,6 +163,182 @@ app.use(basicAuth({
 
 app.get("/api/state", (req, res) => {
   res.json(store);
+});
+
+app.get("/api/news", (req, res) => {
+  res.json({ items: newsCache });
+});
+
+// ---------------------------------------------------------------------------
+// Market data proxy (Yahoo Finance public endpoints, no API key).
+// Why a proxy instead of the browser fetching Yahoo directly: CORS blocks
+// browser->Yahoo requests, and caching here means 5 open dashboard tabs cost
+// one upstream request, not five. All routes below sit behind basic auth.
+// Prices are near-live (typically seconds to ~1 min behind the exchange) --
+// good for watching, NOT an execution feed. The bot itself always trades on
+// IBKR's own data, never on anything served here.
+// ---------------------------------------------------------------------------
+const YF_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+  "Accept": "application/json,text/html,*/*",
+};
+const quoteCache = new Map();   // symbol -> {ts, data}
+const chartCache = new Map();   // symbol|range -> {ts, data}
+const fundCache = new Map();    // symbol -> {ts, data}
+const QUOTE_TTL = 8_000, CHART_TTL = 30_000, FUND_TTL = 6 * 3600_000;
+
+const SYMBOL_RE = /^[A-Za-z0-9^.\-=]{1,12}$/;
+
+async function yfChart(symbol, range, interval) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+    `?range=${range}&interval=${interval}&includePrePost=false&events=div%2Csplit`;
+  const r = await fetch(url, { headers: YF_HEADERS, signal: AbortSignal.timeout(7000) });
+  if (!r.ok) throw new Error(`yahoo chart ${symbol}: HTTP ${r.status}`);
+  const j = await r.json();
+  const result = j?.chart?.result?.[0];
+  if (!result) throw new Error(`yahoo chart ${symbol}: empty result`);
+  return result;
+}
+
+function shapeQuote(result) {
+  const meta = result.meta || {};
+  const closes = result.indicators?.quote?.[0]?.close || [];
+  const spark = closes.filter(v => typeof v === "number");
+  const price = meta.regularMarketPrice;
+  const prev = meta.chartPreviousClose ?? meta.previousClose;
+  return {
+    symbol: meta.symbol,
+    name: meta.longName || meta.shortName || meta.symbol,
+    currency: meta.currency,
+    exchange: meta.exchangeName,
+    type: meta.instrumentType,
+    price,
+    prevClose: prev,
+    change: (typeof price === "number" && typeof prev === "number") ? price - prev : null,
+    changePct: (typeof price === "number" && typeof prev === "number" && prev) ? (price - prev) / prev * 100 : null,
+    dayHigh: meta.regularMarketDayHigh ?? null,
+    dayLow: meta.regularMarketDayLow ?? null,
+    volume: meta.regularMarketVolume ?? null,
+    fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ?? null,
+    fiftyTwoWeekLow: meta.fiftyTwoWeekLow ?? null,
+    marketState: meta.marketState || null,
+    spark: spark.slice(-64),
+  };
+}
+
+app.get("/api/quotes", async (req, res) => {
+  const symbols = String(req.query.symbols || "").split(",").map(s => s.trim()).filter(s => SYMBOL_RE.test(s)).slice(0, 40);
+  if (!symbols.length) return res.json({ quotes: {} });
+  const now = Date.now();
+  const out = {};
+  await Promise.allSettled(symbols.map(async sym => {
+    const hit = quoteCache.get(sym);
+    if (hit && now - hit.ts < QUOTE_TTL) { out[sym] = hit.data; return; }
+    try {
+      const data = shapeQuote(await yfChart(sym, "1d", "5m"));
+      quoteCache.set(sym, { ts: Date.now(), data });
+      out[sym] = data;
+    } catch (e) {
+      if (hit) out[sym] = hit.data; // serve stale over nothing
+    }
+  }));
+  res.json({ quotes: out, at: new Date().toISOString() });
+});
+
+const CHART_RANGES = { "1d": "5m", "5d": "15m", "1mo": "1h", "3mo": "1d", "6mo": "1d", "1y": "1d", "5y": "1wk" };
+app.get("/api/chart", async (req, res) => {
+  const symbol = String(req.query.symbol || "");
+  const range = String(req.query.range || "1d");
+  if (!SYMBOL_RE.test(symbol) || !CHART_RANGES[range]) return res.status(400).json({ error: "bad symbol/range" });
+  const key = symbol + "|" + range;
+  const hit = chartCache.get(key);
+  if (hit && Date.now() - hit.ts < CHART_TTL) return res.json(hit.data);
+  try {
+    const result = await yfChart(symbol, range, CHART_RANGES[range]);
+    const ts = result.timestamp || [];
+    const q = result.indicators?.quote?.[0] || {};
+    const candles = [];
+    for (let i = 0; i < ts.length; i++) {
+      if ([q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]].some(v => typeof v !== "number")) continue;
+      candles.push({ t: ts[i], o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume?.[i] ?? 0 });
+    }
+    const data = { symbol, range, interval: CHART_RANGES[range], candles, meta: shapeQuote(result) };
+    chartCache.set(key, { ts: Date.now(), data });
+    res.json(data);
+  } catch (e) {
+    if (hit) return res.json(hit.data);
+    res.status(502).json({ error: String(e.message || e) });
+  }
+});
+
+// --- Fundamentals need Yahoo's cookie+crumb dance. Fail soft: the panel
+// just shows fewer rows if Yahoo changes the handshake again.
+let yfAuth = { cookie: null, crumb: null, ts: 0 };
+async function getYfAuth() {
+  if (yfAuth.crumb && Date.now() - yfAuth.ts < 4 * 3600_000) return yfAuth;
+  const r1 = await fetch("https://fc.yahoo.com/", { headers: YF_HEADERS, redirect: "manual", signal: AbortSignal.timeout(7000) }).catch(() => null);
+  let cookie = "";
+  if (r1) {
+    const sc = (typeof r1.headers.getSetCookie === "function") ? r1.headers.getSetCookie() : [r1.headers.get("set-cookie")].filter(Boolean);
+    cookie = sc.map(c => String(c).split(";")[0]).join("; ");
+  }
+  if (!cookie) throw new Error("no yahoo cookie");
+  const r2 = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+    headers: { ...YF_HEADERS, Cookie: cookie }, signal: AbortSignal.timeout(7000) });
+  const crumb = (await r2.text()).trim();
+  if (!r2.ok || !crumb || crumb.includes("<")) throw new Error("no yahoo crumb");
+  yfAuth = { cookie, crumb, ts: Date.now() };
+  return yfAuth;
+}
+
+const num = (x) => (x && typeof x === "object" ? x.raw : x);
+app.get("/api/fundamentals", async (req, res) => {
+  const symbol = String(req.query.symbol || "");
+  if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: "bad symbol" });
+  const hit = fundCache.get(symbol);
+  if (hit && Date.now() - hit.ts < FUND_TTL) return res.json(hit.data);
+  try {
+    const { cookie, crumb } = await getYfAuth();
+    const modules = "price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,calendarEvents";
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}` +
+      `?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
+    const r = await fetch(url, { headers: { ...YF_HEADERS, Cookie: cookie }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw new Error(`quoteSummary HTTP ${r.status}`);
+    const j = await r.json();
+    const s = j?.quoteSummary?.result?.[0] || {};
+    const sd = s.summaryDetail || {}, ks = s.defaultKeyStatistics || {}, fd = s.financialData || {},
+          ap = s.assetProfile || {}, pr = s.price || {}, ce = s.calendarEvents || {};
+    const data = {
+      symbol,
+      name: pr.longName || pr.shortName || symbol,
+      sector: ap.sector || null,
+      industry: ap.industry || null,
+      website: ap.website || null,
+      summary: ap.longBusinessSummary ? String(ap.longBusinessSummary).slice(0, 420) : null,
+      marketCap: num(pr.marketCap) ?? num(sd.marketCap) ?? null,
+      trailingPE: num(sd.trailingPE) ?? null,
+      forwardPE: num(sd.forwardPE) ?? num(ks.forwardPE) ?? null,
+      eps: num(ks.trailingEps) ?? null,
+      dividendYield: num(sd.dividendYield) ?? null,
+      beta: num(sd.beta) ?? null,
+      profitMargin: num(fd.profitMargins) ?? null,
+      grossMargin: num(fd.grossMargins) ?? null,
+      revenue: num(fd.totalRevenue) ?? null,
+      revenueGrowth: num(fd.revenueGrowth) ?? null,
+      freeCashflow: num(fd.freeCashflow) ?? null,
+      debtToEquity: num(fd.debtToEquity) ?? null,
+      returnOnEquity: num(fd.returnOnEquity) ?? null,
+      targetMeanPrice: num(fd.targetMeanPrice) ?? null,
+      recommendation: fd.recommendationKey || null,
+      analystCount: num(fd.numberOfAnalystOpinions) ?? null,
+      nextEarnings: ce.earnings?.earningsDate?.length ? num(ce.earnings.earningsDate[0]) : null,
+    };
+    fundCache.set(symbol, { ts: Date.now(), data });
+    res.json(data);
+  } catch (e) {
+    if (hit) return res.json(hit.data);
+    res.json({ symbol, error: String(e.message || e) });
+  }
 });
 
 app.use(express.static(path.join(__dirname, "public")));
