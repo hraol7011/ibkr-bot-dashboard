@@ -201,6 +201,15 @@
     font: 600 9.5px var(--mono); padding: 3px 7px; border-radius: 10px; cursor: pointer; }
   #chatSuggest button:hover { color: var(--cyn); border-color: #1e3a4a; }
   #engineTag { font: 400 8.5px var(--mono); color: var(--dim2); }
+  #voiceBar { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 4px 12px; border-bottom: 1px solid var(--bd); flex-shrink: 0;
+    font: 400 9px var(--mono); color: var(--dim2); min-height: 20px; }
+  #voiceState.speaking { color: var(--cyn); }
+  #voiceState.listening { color: var(--grn); }
+  .btn.live { color: var(--cyn); border-color: #1e3a4a; background: #0d1720; }
+  .btn.rec { color: var(--red); border-color: #4a2323; background: #1a0e0e; animation: pulse 1.2s infinite; }
+  /* live transcript preview while the mic is open */
+  #interim { color: var(--grn); font: 400 11.5px var(--mono); font-style: italic; opacity: .85; }
 
   #footer { padding: 5px 18px; color: var(--dim2); font: 400 9.5px var(--mono); border-top: 1px solid var(--bd);
     display: flex; justify-content: space-between; flex-shrink: 0; }
@@ -354,8 +363,13 @@
     <div class="col" id="fridayCol">
       <div class="hd">
         <span class="t"><span class="radar"></span>FRIDAY</span>
-        <span class="r" id="engineTag"></span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <button class="btn sm" id="btnVoice" title="Speech output: off / alerts only / everything">🔇 VOICE OFF</button>
+          <button class="btn sm" id="btnMic" title="Hold a conversation — click and speak">🎤</button>
+          <button class="btn sm" id="btnBrief" title="Spoken situation report">BRIEF</button>
+        </span>
       </div>
+      <div id="voiceBar"><span id="voiceState"></span><span id="engineTag"></span></div>
       <div id="chatLog"></div>
       <div id="chatSuggest">
         <button data-q="what are my positions?">positions</button>
@@ -381,6 +395,7 @@
 
 <script src="world.js"></script>
 <script src="globe.js"></script>
+<script src="voice.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -536,8 +551,11 @@ async function askFriday(question) {
     typing.remove();
     const { clean, action } = parseAction(j.reply || "");
     addMsg("friday", clean || "(no reply)", { action });
+    // You asked, so you get an answer out loud even in alerts-only mode --
+    // but not if voice is switched off entirely.
+    if (V.mode !== "off") V.speak(clean, { priority: 2 });
     chatHistory.push({ role: "assistant", content: j.reply || "" });
-    $("engineTag").textContent = j.engine === "claude" ? "conversational" : "built-in";
+    $("engineTag").textContent = { claude: "claude", openrouter: "openrouter", builtin: "built-in" }[j.engine] || j.engine;
     if (j.warning) addMsg("auto", "note: " + j.warning, { tone: "warn" });
   } catch (e) {
     typing.remove();
@@ -561,12 +579,102 @@ $("chatIn").addEventListener("input", e => {
 });
 $("chatSuggest").querySelectorAll("button").forEach(b => b.onclick = () => askFriday(b.dataset.q));
 
+/* ==================== voice ==================== */
+const V = window.FridayVoice;
+const VOICE_MODES = ["off", "alerts", "all"];
+const VOICE_LABEL = { off: "🔇 VOICE OFF", alerts: "🔊 ALERTS", all: "🔊 SPEAK ALL" };
+let voiceMode = (() => { try { return localStorage.getItem("friday.voice") || "off"; } catch { return "off"; } })();
+
+function applyVoiceMode() {
+  V.setMode(voiceMode);
+  const b = $("btnVoice");
+  b.textContent = VOICE_LABEL[voiceMode];
+  b.classList.toggle("live", voiceMode !== "off");
+  try { localStorage.setItem("friday.voice", voiceMode); } catch {}
+}
+$("btnVoice").onclick = () => {
+  V.prime();                                    // browsers need a gesture to unlock speech
+  voiceMode = VOICE_MODES[(VOICE_MODES.indexOf(voiceMode) + 1) % 3];
+  applyVoiceMode();
+  if (voiceMode !== "off") {
+    V.speak(voiceMode === "all" ? "Voice on. I'll call everything." : "Voice on. Alerts and fills only.",
+            { priority: 3, force: true });
+  }
+};
+if (!V.supported) { $("btnVoice").disabled = true; $("btnVoice").textContent = "🔇 NO TTS"; }
+applyVoiceMode();
+
+V.onStateChange(err => {
+  const s = $("voiceState");
+  $("btnMic").classList.toggle("rec", V.listening);
+  if (err) { s.className = ""; s.textContent = err === "not-allowed" ? "mic blocked — allow it in browser settings" : "mic: " + err; return; }
+  if (V.listening) { s.className = "listening"; s.textContent = "● listening…"; }
+  else if (V.speaking) { s.className = "speaking"; s.textContent = "◆ speaking…"; }
+  else { s.className = ""; s.textContent = V.supported ? "voice: " + V.voiceName.slice(0, 22) : "speech unavailable"; }
+});
+
+// Mic: click to talk, click again (or just stop talking) to send.
+let interimEl = null;
+if (!V.micSupported) { $("btnMic").disabled = true; $("btnMic").title = "This browser has no speech recognition"; }
+$("btnMic").onclick = () => { V.prime(); V.listen(); };
+V.onTranscript(({ interim, final }) => {
+  if (interim && !final) {
+    if (!interimEl) { interimEl = document.createElement("div"); interimEl.id = "interim";
+      $("chatLog").appendChild(interimEl); }
+    interimEl.textContent = "🎤 " + interim;
+    $("chatLog").scrollTop = $("chatLog").scrollHeight;
+  }
+  if (final) {
+    if (interimEl) { interimEl.remove(); interimEl = null; }
+    askFriday(final);
+  }
+});
+
+// Spoken situation report -- the "brief me" a desk head would ask for.
+function buildBriefing() {
+  const l = lastStateLatest;
+  if (!l) return "No report from the bot yet.";
+  const stats = lastPnlStats;
+  const bits = [];
+  bits.push(`Equity ${fmtM(l.netLiquidation)}.`);
+  if (stats) {
+    const u = stats.total;
+    bits.push(`${u >= 0 ? "Up" : "Down"} ${fmtM(Math.abs(u))} unrealized across ${lastPositions.length} position${lastPositions.length === 1 ? "" : "s"}, ${stats.wins} green, ${stats.losses} red.`);
+  }
+  const best = lastPositions.map(p => {
+    const q = quotesCache[p.symbol];
+    const last = (q && typeof q.price === "number") ? q.price : p.marketPrice;
+    const pnl = (typeof p.avgCost === "number" && typeof last === "number") ? (last - p.avgCost) * p.quantity : p.unrealizedPnl;
+    return { name: p.display || p.symbol, pnl };
+  }).filter(x => typeof x.pnl === "number").sort((a, b) => b.pnl - a.pnl);
+  if (best.length) {
+    bits.push(`Best is ${best[0].name} at ${sgn(best[0].pnl)}${fmtM(Math.abs(best[0].pnl))}.`);
+    if (best.length > 1) bits.push(`Worst is ${best[best.length-1].name} at ${sgn(best[best.length-1].pnl)}${fmtM(Math.abs(best[best.length-1].pnl))}.`);
+  }
+  if (intel && intel.nextHigh) {
+    const mins = Math.round((intel.nextHigh.at - Date.now()) / 60000);
+    const exposed = exposedCurrencies().has(intel.nextHigh.currency);
+    if (mins > 0) bits.push(`Next high impact, ${intel.nextHigh.currency} ${intel.nextHigh.title}, in ${mins} minute${mins === 1 ? "" : "s"}${exposed ? ", and you are exposed" : ""}.`);
+  }
+  if (l.killSwitchTripped) bits.push("Kill switch is tripped. No new trades.");
+  else if (l.scanningPaused) bits.push("Scanning is paused.");
+  return bits.join(" ");
+}
+$("btnBrief").onclick = () => {
+  V.prime();
+  const text = buildBriefing();
+  addMsg("friday", text);
+  V.speak(text, { priority: 3, force: true });   // explicit request always speaks
+};
+
 /* auto-narration: events land in the same panel FRIDAY talks in */
 let lastAutoText = null;
-function narrate(text, tone) {
+function narrate(text, tone, opts = {}) {
   if (text === lastAutoText) return;      // the scan line repeats verbatim otherwise
   lastAutoText = text;
   addMsg("auto", text, { tone });
+  // priority decides whether "alerts only" mode says it out loud
+  V.speak(opts.speech || text, { priority: opts.priority ?? 0 });
 }
 addMsg("friday", "Desk is up. I'm watching the bot — ask me anything about positions, stops, targets or what it's doing.");
 
@@ -583,12 +691,16 @@ function narrateTrades(recentTrades) {
     const short = dir.includes("SELL") || dir.includes("SHORT") || dir === "BEAR";
     if (t.status === "opened") {
       const v = CITY[venueOf(t.symbol)];
-      narrate(`${short ? "SHORT" : "LONG"} ${t.quantity} ${t.display || t.symbol} @ ${t.entry} → routed to ${v ? v.label.split(" · ")[0] : "market"} · stop ${t.stop} / target ${t.target}`, short ? "down" : "up");
+      narrate(`${short ? "SHORT" : "LONG"} ${t.quantity} ${t.display || t.symbol} @ ${t.entry} → routed to ${v ? v.label.split(" · ")[0] : "market"} · stop ${t.stop} / target ${t.target}`,
+        short ? "down" : "up",
+        { priority: 2, speech: `Filled. ${short ? "Short" : "Long"} ${t.quantity} ${t.display || t.symbol} at ${t.entry}. Stop ${t.stop}, target ${t.target}.` });
       fireArc(t.symbol, short ? "#ff5b56" : "#1fdb85");
     } else if (t.status === "skipped") {
-      narrate(`${t.display || t.symbol}: signals lined up but risk blocked it — ${t.reason || "blocked"}`, "warn");
+      narrate(`${t.display || t.symbol}: signals lined up but risk blocked it — ${t.reason || "blocked"}`, "warn",
+        { priority: 1, speech: `${t.display || t.symbol} setup blocked by risk. ${t.reason || ""}` });
     } else if (t.status === "error") {
-      narrate(`${t.display || t.symbol}: order failed to place`, "warn");
+      narrate(`${t.display || t.symbol}: order failed to place`, "warn",
+        { priority: 3, speech: `Heads up. Order for ${t.display || t.symbol} failed to place.` });
     }
   }
 }
@@ -614,9 +726,11 @@ function narrateConn(connected, stale) {
   if (s === prevConnState) return;
   prevConnState = s;
   if (first) return;
-  if (s === "up") narrate("Reconnected to IBKR — trading loop live.", "up");
-  else if (s === "down") narrate("Lost connection to IBKR — reconnecting.", "warn");
-  else narrate("No fresh report from the bot in a while.", "warn");
+  if (s === "up") narrate("Reconnected to IBKR — trading loop live.", "up", { priority: 2 });
+  else if (s === "down") narrate("Lost connection to IBKR — reconnecting.", "warn",
+    { priority: 3, speech: "Warning. Lost connection to Interactive Brokers. Reconnecting." });
+  else narrate("No fresh report from the bot in a while.", "warn",
+    { priority: 3, speech: "Warning. No fresh report from the bot in a while. Check it's still running." });
 }
 
 /* ============================ globe ============================ */
@@ -851,6 +965,7 @@ const moneyFmt = v => sgn(v) + fmtM(Math.abs(v));
 let lastRealized = 0;
 function updateHeroPnl(stats) {
   if (!stats) return;
+  lastPnlStats = stats;
   const u = stats.total;
   setStat("hU", u, moneyFmt, "v num " + cls(u));
   setStat("hDay", u + (lastRealized || 0), moneyFmt, "v num " + cls(u + (lastRealized || 0)));
@@ -984,8 +1099,10 @@ $("btnNight").onclick = () => { globe.setNight(!globe.nightOn); };
 
 /* ---------------- state plumbing ---------------- */
 let lastPositions = [], lastRecentTrades = [];
+let lastStateLatest = null, lastPnlStats = null;   // used by the spoken briefing
 function applyState(state) {
   const l = state.latest;
+  lastStateLatest = l || lastStateLatest;
   if (l) {
     const stale = state.lastReportAt && (Date.now() - new Date(state.lastReportAt) > 5*60000);
     $("statusDot").className = "dot " + (l.connected && !stale ? "live" : "bad");
@@ -1071,7 +1188,10 @@ setInterval(() => {
     const exposed = exposedCurrencies().has(e.currency);
     narrate(`⚠ ${e.currency} ${e.title} drops in ${Math.round(mins)} minutes` +
       (exposed ? ` — you're holding ${e.currency} exposure. Expect a spread widen and a volatility spike.` : " — no direct exposure in the book."),
-      exposed ? "warn" : null);
+      exposed ? "warn" : null,
+      { priority: exposed ? 3 : 1,
+        speech: `Heads up. ${e.currency} ${e.title} in ${Math.round(mins)} minutes` +
+          (exposed ? `. You are holding ${e.currency} exposure. Expect spreads to widen.` : `. No direct exposure.`) });
   }
 }, 20_000);
 </script>

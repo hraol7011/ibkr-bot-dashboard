@@ -412,8 +412,21 @@ app.get("/api/command-log", (req, res) => res.json({ commands: store.commands.sl
 //     exact -- worth keeping even when the model is available as the fallback
 //     if the API call fails.
 // ===========================================================================
+// Two ways to give FRIDAY a language model, plus a working fallback if you
+// give it neither:
+//   ANTHROPIC_API_KEY  -- direct Anthropic API (paid, billed per token)
+//   OPENROUTER_API_KEY -- OpenRouter, which has genuinely free models
+//                         (":free" suffix). Free tier is ~20 req/min and
+//                         50 req/day with no card on file, which is plenty
+//                         for a chat panel one person talks to.
+// Anthropic wins if both are set.
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const FRIDAY_MODEL = process.env.FRIDAY_MODEL || "claude-sonnet-4-5";
+// Override with FRIDAY_MODEL when using OpenRouter -- free model IDs come and
+// go, so if this one is retired the error surfaces in the chat panel and you
+// can swap it without a code change.
+const OPENROUTER_MODEL = process.env.FRIDAY_MODEL || "deepseek/deepseek-chat-v3-0324:free";
 
 const SYMBOL_VENUE = {
   AAPL: "NASDAQ (New York)", MSFT: "NASDAQ (New York)", NVDA: "NASDAQ (New York)",
@@ -619,41 +632,60 @@ app.post("/api/friday/chat", async (req, res) => {
   const question = history.length ? String(history[history.length - 1].content || "") : "";
   const desk = buildDeskState();
 
-  if (!ANTHROPIC_API_KEY) {
+  if (!ANTHROPIC_API_KEY && !OPENROUTER_API_KEY) {
     return res.json({ reply: fridayFallback(question, desk), engine: "builtin" });
   }
+
+  const convo = history.map(m => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: String(m.content || "").slice(0, 4000),
+  }));
+  // Attach the live snapshot to the newest user turn so the model always
+  // reasons over current numbers rather than whatever was true earlier.
+  if (convo.length) {
+    const i = convo.length - 1;
+    convo[i] = { ...convo[i],
+      content: `<desk_state>\n${JSON.stringify(desk)}\n</desk_state>\n\n${convo[i].content}` };
+  }
+
   try {
-    const convo = history.map(m => ({
-      role: m.role === "assistant" ? "assistant" : "user",
-      content: String(m.content || "").slice(0, 4000),
-    }));
-    // Attach the live snapshot to the newest user turn so the model always
-    // reasons over current numbers rather than whatever was true earlier.
-    if (convo.length) {
-      const i = convo.length - 1;
-      convo[i] = { ...convo[i],
-        content: `<desk_state>\n${JSON.stringify(desk)}\n</desk_state>\n\n${convo[i].content}` };
+    let text = "", engine = "";
+    if (ANTHROPIC_API_KEY) {
+      engine = "claude";
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY,
+                   "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: FRIDAY_MODEL, max_tokens: 900, system: FRIDAY_SYSTEM, messages: convo }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(`Anthropic: ${j?.error?.message || "HTTP " + r.status}`);
+      text = (j.content || []).filter(c => c.type === "text").map(c => c.text).join("").trim();
+    } else {
+      engine = "openrouter";
+      // OpenAI-compatible shape; system prompt is just the first message.
+      const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          // OpenRouter asks for these for attribution; harmless if unset.
+          "http-referer": "https://ibkr-bot-dashboard.onrender.com",
+          "x-title": "FRIDAY Trading Desk",
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL, max_tokens: 900,
+          messages: [{ role: "system", content: FRIDAY_SYSTEM }, ...convo],
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(`OpenRouter: ${j?.error?.message || "HTTP " + r.status}`);
+      text = (j.choices?.[0]?.message?.content || "").trim();
     }
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: FRIDAY_MODEL, max_tokens: 900,
-        system: FRIDAY_SYSTEM, messages: convo,
-      }),
-    });
-    const j = await r.json();
-    if (!r.ok) {
-      const detail = j?.error?.message || `HTTP ${r.status}`;
-      return res.json({ reply: fridayFallback(question, desk), engine: "builtin", warning: `Claude API: ${detail}` });
-    }
-    const text = (j.content || []).filter(c => c.type === "text").map(c => c.text).join("").trim();
-    res.json({ reply: text || fridayFallback(question, desk), engine: "claude" });
+    res.json({ reply: text || fridayFallback(question, desk), engine: text ? engine : "builtin" });
   } catch (e) {
+    // Never leave the panel dead -- fall back to the deterministic answer and
+    // surface why the model path failed.
     res.json({ reply: fridayFallback(question, desk), engine: "builtin", warning: String(e.message || e) });
   }
 });
