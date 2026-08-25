@@ -329,7 +329,41 @@ const YAHOO_MISC = [
 const STOOQ_FALLBACK = { SPX: "^spx", DJI: "^dji", NDX: "^ndq", WTI: "cl.f", BRENT: "cb.f", GOLD: "gc.f", SILVER: "si.f", NATGAS: "ng.f", DXY: "dx.f" };
 
 const quotes = {};   // id -> {price, change, changePct, prevClose, spark, name, t, src}
-function setQuote(id, q) { quotes[id] = { ...quotes[id], ...q, t: new Date().toISOString() }; }
+// Rolling in-memory price-sample log, seeded by every live quote poll (Finnhub
+// stocks/FX, the index ETF proxies, coinbase, etc). Both FMP's intraday chart
+// endpoint (plan-gated on the free tier) and Yahoo's chart API (persistently
+// 429s from Render's IP) are unreliable for candle data, but the plain quote
+// polling that feeds the tape/WEI screen keeps working -- so when both real
+// chart sources fail, /api/chart buckets these samples into OHLC candles
+// instead of showing nothing. Resets on server restart/redeploy, so it only
+// covers time since the process came up, which is still far better than a
+// blank chart.
+const priceHistory = {}; // id -> [{t (unix seconds), price}]
+const MAX_HISTORY_POINTS = 3000;
+function recordHistory(id, price, tSec) {
+  if (typeof price !== "number" || !isFinite(price)) return;
+  const arr = priceHistory[id] || (priceHistory[id] = []);
+  arr.push({ t: tSec, price });
+  if (arr.length > MAX_HISTORY_POINTS) arr.splice(0, arr.length - MAX_HISTORY_POINTS);
+}
+function candlesFromHistory(id, rangeSeconds, bucketSeconds) {
+  const arr = priceHistory[id];
+  if (!arr || arr.length < 2) return [];
+  const cutoff = Math.floor(Date.now() / 1000) - rangeSeconds;
+  const buckets = new Map();
+  for (const p of arr) {
+    if (p.t < cutoff) continue;
+    const bt = Math.floor(p.t / bucketSeconds) * bucketSeconds;
+    let b = buckets.get(bt);
+    if (!b) buckets.set(bt, { t: bt, o: p.price, h: p.price, l: p.price, c: p.price, v: 0 });
+    else { b.h = Math.max(b.h, p.price); b.l = Math.min(b.l, p.price); b.c = p.price; }
+  }
+  return Array.from(buckets.values()).sort((a, b) => a.t - b.t);
+}
+function setQuote(id, q) {
+  quotes[id] = { ...quotes[id], ...q, t: new Date().toISOString() };
+  if (typeof q.price === "number") recordHistory(id, q.price, Math.floor(Date.now() / 1000));
+}
 
 // Both watchlists are now too large to poll in full every tick without
 // blowing Finnhub's free 60/min limit, so each poller only advances through
@@ -601,23 +635,33 @@ app.get("/api/chart", async (req, res) => {
         }
         if (!candles.length) throw new Error("fmp empty");
       } catch {
-        const [yr, yi] = YR[range];
-        const ysym = cls === "fx" ? (FX.find(f => f[0] === id) || [])[2] : id;
-        const result = await yfChart(ysym || id, yr, yi);
+        try {
+          const [yr, yi] = YR[range];
+          const ysym = cls === "fx" ? (FX.find(f => f[0] === id) || [])[2] : id;
+          const result = await yfChart(ysym || id, yr, yi);
+          const ts = result.timestamp || [], q = result.indicators?.quote?.[0] || {};
+          for (let i = 0; i < ts.length; i++) {
+            if ([q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]].some(v => typeof v !== "number")) continue;
+            candles.push({ t: ts[i], o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume?.[i] ?? 0 });
+          }
+        } catch { /* fall through to our own polled-quote history below */ }
+        if (!candles.length && ["1d", "5d"].includes(range)) {
+          candles = candlesFromHistory(id, range === "1d" ? 26 * 3600 : 6 * 86400, range === "1d" ? 300 : 1800);
+        }
+      }
+    } else { // misc (indices/commodities) and yields -> yahoo, then our own polled history
+      const ysym = (YAHOO_MISC.find(y => y[0] === id) || [])[1] || id;
+      const [yr, yi] = YR[range];
+      try {
+        const result = await yfChart(ysym, yr, yi);
         const ts = result.timestamp || [], q = result.indicators?.quote?.[0] || {};
         for (let i = 0; i < ts.length; i++) {
           if ([q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]].some(v => typeof v !== "number")) continue;
           candles.push({ t: ts[i], o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume?.[i] ?? 0 });
         }
-      }
-    } else { // misc (indices/commodities) and yields -> yahoo only
-      const ysym = (YAHOO_MISC.find(y => y[0] === id) || [])[1] || id;
-      const [yr, yi] = YR[range];
-      const result = await yfChart(ysym, yr, yi);
-      const ts = result.timestamp || [], q = result.indicators?.quote?.[0] || {};
-      for (let i = 0; i < ts.length; i++) {
-        if ([q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]].some(v => typeof v !== "number")) continue;
-        candles.push({ t: ts[i], o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume?.[i] ?? 0 });
+      } catch { /* fall through */ }
+      if (!candles.length && ["1d", "5d"].includes(range)) {
+        candles = candlesFromHistory(id, range === "1d" ? 26 * 3600 : 6 * 86400, range === "1d" ? 300 : 1800);
       }
     }
     const data = { id, range, candles };
