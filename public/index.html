@@ -3,955 +3,265 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FRIDAY — Terminal</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23000'/%3E%3Ctext x='50' y='70' font-size='58' text-anchor='middle' fill='%23fb8b1e' font-family='monospace' font-weight='bold'%3EF%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<title>FRIDAY — Research Desk</title>
 <style>
   :root {
-    --bg: #000; --panel: #0a0a0a; --panel2: #101010; --strip: #161616;
-    --bd: #2a2a2a; --bd2: #3a3a3a;
-    --amb: #fb8b1e; --amb2: #ffb454; --wht: #e8e8e8; --dim: #8a8a8a; --dim2: #555;
-    --grn: #00d26a; --red: #ff433d; --cyn: #4fc3ff; --yel: #ffe14d;
-    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --bg: #06070a; --panel: #0d1016; --panel2: #10141b; --bd: #1c222c; --bd2: #262e3a;
+    --txt: #e8ecf3; --dim: #7c8698; --dim2: #4d5666;
+    --grn: #1fdb85; --red: #ff5b56; --amb: #f0a93b; --cyn: #3fc8ff; --violet: #a98bff;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--wht); font-family: var(--mono); font-size: 11px; overflow: hidden; }
-  ::selection { background: var(--amb); color: #000; }
-  ::-webkit-scrollbar { width: 7px; height: 7px; }
-  ::-webkit-scrollbar-thumb { background: #333; }
-  a { color: var(--cyn); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .up { color: var(--grn); } .down { color: var(--red); } .amb { color: var(--amb); }
-  .num { font-variant-numeric: tabular-nums; }
-  button { font-family: var(--mono); }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--txt);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    overflow: hidden;
+  }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .up { color: var(--grn); } .down { color: var(--red); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--bd2); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
 
-  /* ============ command bar ============ */
-  #cmdbar { display: flex; align-items: stretch; height: 30px; background: #0d0d0d; border-bottom: 2px solid var(--amb); }
-  #logo { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--amb); color: #000; font-weight: 700; letter-spacing: .12em; font-size: 13px; }
-  #cmd { flex: 1; background: #001a33; border: 0; outline: none; color: var(--yel); font-family: var(--mono); font-size: 12px; padding: 0 12px; letter-spacing: .04em; }
-  #cmd::placeholder { color: #3f6a8f; }
-  #go { background: var(--grn); color: #000; border: 0; font-weight: 700; padding: 0 14px; cursor: pointer; letter-spacing: .08em; }
-  #cmdhint { display: flex; align-items: center; padding: 0 10px; color: var(--dim); font-size: 9.5px; background: #0d0d0d; border-left: 1px solid var(--bd); white-space: nowrap; }
+  #app { height: 100vh; display: flex; flex-direction: column; }
 
-  /* ============ status strip ============ */
-  #status { display: flex; align-items: center; height: 24px; background: var(--strip); border-bottom: 1px solid var(--bd); padding: 0 8px; gap: 16px; font-size: 10px; overflow: hidden; white-space: nowrap; }
-  #status .lbl { color: var(--dim); }
-  #status .sep { color: var(--dim2); }
-  #botLight { width: 7px; height: 7px; border-radius: 50%; background: var(--dim2); display: inline-block; margin-right: 5px; }
-  #botLight.ok { background: var(--grn); box-shadow: 0 0 6px var(--grn); animation: blink 1.8s infinite; }
-  #botLight.bad { background: var(--red); }
-  @keyframes blink { 50% { opacity: .35; } }
+  /* ---------------- header / hero ---------------- */
+  #hdr {
+    display: flex; align-items: center; gap: 18px; padding: 10px 18px;
+    border-bottom: 1px solid var(--bd); background: linear-gradient(180deg, #0b0d12, #06070a);
+    flex-shrink: 0; position: relative; overflow: hidden;
+  }
+  #hdr::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(63,200,255,.06), transparent);
+    width: 40%; animation: sweep 7s linear infinite;
+  }
+  @keyframes sweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
+  #brand { display: flex; align-items: center; gap: 9px; z-index: 1; }
+  #brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim2); flex-shrink: 0; }
+  #brand .dot.live { background: var(--grn); box-shadow: 0 0 10px rgba(31,219,133,.8); animation: pulse 1.6s infinite; }
+  #brand .dot.bad { background: var(--red); box-shadow: 0 0 10px rgba(255,91,86,.8); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  #brand .name { font-size: 15px; font-weight: 800; letter-spacing: .04em; }
+  #brand .sub { color: var(--dim); font-size: 10px; letter-spacing: .1em; }
+  #heroStats { display: flex; gap: 26px; margin-left: auto; z-index: 1; flex-wrap: wrap; }
+  .hstat { display: flex; flex-direction: column; align-items: flex-end; }
+  .hstat .l { color: var(--dim); font-size: 9px; letter-spacing: .12em; font-weight: 700; }
+  .hstat .v { font-size: 22px; font-weight: 800; }
+  .hstat .v.sm { font-size: 15px; }
+  #eqSpark { height: 26px; width: 110px; margin-left: 4px; }
 
-  /* ============ ticker tape ============ */
-  #tape { height: 22px; background: #050505; border-bottom: 1px solid var(--bd); overflow: hidden; white-space: nowrap; }
-  #tapeTrack { display: inline-flex; height: 22px; align-items: center; animation: scrollT 55s linear infinite; }
-  #tape:hover #tapeTrack { animation-play-state: paused; }
-  #heroBar { display: flex; align-items: stretch; background: #030303; border-bottom: 2px solid var(--bd2); padding: 6px 16px; gap: 28px; flex-wrap: wrap; }
-  #heroBar .hitem { display: flex; flex-direction: column; justify-content: center; min-width: 130px; }
-  #heroBar .hlbl { color: var(--dim); font-size: 10px; letter-spacing: .14em; font-weight: 700; margin-bottom: 2px; }
-  #heroBar .hval { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--wht); }
-  #heroBar .hval.up { color: var(--grn); text-shadow: 0 0 14px rgba(0,210,106,.35); }
-  #heroBar .hval.down { color: var(--red); text-shadow: 0 0 14px rgba(255,67,61,.35); }
-  #heroBar .hsub { color: var(--dim2); font-size: 9.5px; margin-top: 1px; }
-  #heroBar .hitem.positions { justify-content: center; }
-  @media (max-width: 900px) { #heroBar .hval { font-size: 22px; } }
-  @keyframes scrollT { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  .tk { padding: 0 14px; border-right: 1px solid #1a1a1a; font-size: 10px; cursor: pointer; }
-  .tk b { color: var(--amb2); font-weight: 600; }
-  .tk:hover { background: #111; }
-
-  /* ============ frame: sidebar + workspace ============ */
-  #frame { display: flex; height: calc(100vh - 77px); }
-  #side { width: 208px; min-width: 208px; background: var(--panel); border-right: 1px solid var(--bd); display: flex; flex-direction: column; overflow: hidden; }
-  #menu { padding: 6px 0; border-bottom: 1px solid var(--bd); }
-  .mi { display: flex; gap: 8px; padding: 4px 10px; cursor: pointer; color: var(--wht); font-size: 11px; letter-spacing: .03em; }
-  .mi:hover { background: #151515; }
-  .mi.on { background: #1c1200; color: var(--amb2); }
-  .mi .n { color: var(--amb); width: 16px; font-weight: 700; }
-  .mi .k { color: var(--dim); margin-left: auto; font-size: 9px; }
-  #sideList { flex: 1; overflow-y: auto; }
-  .sgh { padding: 4px 10px 2px; color: var(--amb); font-size: 9px; letter-spacing: .15em; font-weight: 700; border-top: 1px solid #1a1a1a; }
-  .srow { display: grid; grid-template-columns: 58px 1fr 52px; padding: 1.5px 10px; cursor: pointer; font-size: 10.5px; }
-  .srow:hover { background: #151515; }
-  .srow.on { background: #1c1200; }
-  .srow .s { color: var(--wht); font-weight: 600; }
-  .srow .p { text-align: right; color: #cfcfcf; }
-  .srow .c { text-align: right; font-size: 9.5px; }
-  .flash-up { animation: fu .7s; } .flash-down { animation: fd .7s; }
-  @keyframes fu { 0% { background: rgba(0,210,106,.35); } }
-  @keyframes fd { 0% { background: rgba(255,67,61,.35); } }
-
-  #work { flex: 1; overflow: hidden; position: relative; background: var(--bg); }
-  .screen { position: absolute; inset: 0; display: none; padding: 6px; gap: 6px; }
-  .screen.on { display: grid; }
-
-  /* ============ panels ============ */
-  .pn { background: var(--panel); border: 1px solid var(--bd); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-  .pn > .hd { background: var(--strip); color: var(--amb); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; padding: 3px 8px; border-bottom: 1px solid var(--bd); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-  .pn > .hd .r { color: var(--dim); font-weight: 400; letter-spacing: .03em; }
-  #pnlNow { font-size: 18px; letter-spacing: 0; font-weight: 700; }
-  #posTable td:nth-child(6) { font-size: 15px; }
-  #posTable td:nth-child(1) { font-size: 12px; }
-  .pn > .bd { flex: 1; overflow: auto; min-height: 0; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-  th, td { text-align: left; padding: 2.5px 7px; border-bottom: 1px solid #161616; white-space: nowrap; }
-  th { color: var(--dim); font-size: 9px; font-weight: 600; letter-spacing: .06em; position: sticky; top: 0; background: var(--panel); }
-  tr.click { cursor: pointer; }
-  tr.click:hover { background: #151515; }
-  tr.newrow { animation: rowIn 1.4s; }
-  @keyframes rowIn { 0% { background: rgba(251,139,30,.25); } }
-  .st-opened { color: var(--grn); font-weight: 700; } .st-skipped { color: var(--dim); } .st-error { color: var(--red); font-weight: 700; }
-  .tag { font-size: 8px; border: 1px solid var(--bd2); padding: 0 4px; font-weight: 700; }
-  .tag.fx { color: var(--amb2); } .tag.stk { color: var(--cyn); } .tag.cr { color: #c886ff; }
-  .empty { color: var(--dim); padding: 8px; font-size: 10.5px; }
-
-  /* LIVE screen -- big animated buy/sell feed + position cards */
-  #liveFeed { display: flex; flex-direction: column; gap: 7px; padding: 8px; }
-  .lcard { border: 1px solid var(--bd2); border-left: 5px solid var(--dim2); background: var(--panel2); padding: 9px 12px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .lcard.buy { border-left-color: var(--grn); }
-  .lcard.sell { border-left-color: var(--red); }
-  .lcard .lside { font-size: 15px; font-weight: 800; letter-spacing: .06em; min-width: 52px; }
-  .lcard.buy .lside { color: var(--grn); } .lcard.sell .lside { color: var(--red); }
-  .lcard .lsym { font-size: 20px; font-weight: 800; color: #fff; min-width: 110px; }
-  .lcard .lmeta { color: var(--dim); font-size: 11px; flex: 1; min-width: 160px; }
-  .lcard .lpx { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .lcard .ltime { color: var(--dim2); font-size: 9.5px; white-space: nowrap; }
-  .lcard.lnew { animation: lcardIn .9s ease-out; }
-  @keyframes lcardIn { 0% { transform: translateX(24px) scale(.98); opacity: 0; background: rgba(251,139,30,.30); } 60% { opacity: 1; } 100% { transform: none; background: var(--panel2); } }
-  #livePositions { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
-  .pcard { border: 1px solid var(--bd2); background: var(--panel2); padding: 10px 12px; }
-  .pcard .prow1 { display: flex; justify-content: space-between; align-items: baseline; }
-  .pcard .psym { font-size: 18px; font-weight: 800; color: #fff; }
-  .pcard .pdir { font-size: 10px; font-weight: 700; letter-spacing: .08em; margin-left: 8px; }
-  .pcard .pdir.long { color: var(--grn); } .pcard .pdir.short { color: var(--red); }
-  .pcard .ppnl { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .pcard .prow2 { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 4px; }
-  .pcard.flashu { animation: flashUp 1.1s; } .pcard.flashd { animation: flashDown 1.1s; }
-  @keyframes flashUp { 0% { background: rgba(0,210,106,.32); } 100% { background: var(--panel2); } }
-  @keyframes flashDown { 0% { background: rgba(255,67,61,.32); } 100% { background: var(--panel2); } }
-
-  /* grids per screen */
-  .g-live { grid-template-columns: 1fr 1.3fr; gap: 6px; height: 100%; }
-  .g-wei { grid-template-columns: 1.05fr 1.15fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 100%; }
-  .g-gp { grid-template-columns: 1fr 250px; grid-template-rows: auto 1fr; gap: 6px; height: 100%; }
-  .g-des { grid-template-columns: 1.1fr 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 6px; height: 100%; }
-  .g-n { grid-template-columns: 1.4fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 100%; }
-  .g-eco { grid-template-columns: 1fr 1fr; gap: 6px; height: 100%; }
-  .g-globe { grid-template-columns: 1fr 250px; gap: 6px; height: 100%; }
-  .g-port { grid-template-columns: 1.2fr 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 6px; height: 100%; }
-  .g-diag { grid-template-columns: 1fr 1fr; gap: 6px; height: 100%; }
-
-  /* GP screen */
-  #gpHead { display: flex; align-items: baseline; gap: 14px; padding: 6px 10px; flex-wrap: wrap; }
-  #gpSym { font-size: 19px; font-weight: 700; color: var(--amb2); }
-  #gpName { color: var(--dim); font-size: 10px; }
-  #gpPx { font-size: 24px; font-weight: 700; color: #fff; transition: color .3s; }
-  #gpChg { font-size: 12px; font-weight: 700; }
-  .tf { display: flex; gap: 3px; margin-left: auto; }
-  .tf button, .cbtn { background: #111; border: 1px solid var(--bd2); color: var(--dim); font-size: 9.5px; font-weight: 700; padding: 3px 9px; cursor: pointer; }
-  .tf button.on, .cbtn.on { color: var(--amb2); border-color: var(--amb); background: #1c1200; }
-  .cbtn:hover { color: var(--wht); }
-  #candleHost { width: 100%; height: 100%; }
-
-  /* DES */
-  .biasrow { display: flex; gap: 6px; padding: 6px; }
-  .bias { flex: 1; border: 1px solid var(--bd); background: var(--panel2); padding: 6px 8px; }
-  .bias .t { color: var(--dim); font-size: 9px; letter-spacing: .12em; }
-  .bias .v { font-size: 13px; font-weight: 700; margin: 2px 0; }
-  .bias .bar { height: 5px; background: #1c1c1c; position: relative; }
-  .bias .bar i { position: absolute; top: 0; bottom: 0; }
-  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; padding: 4px 8px; }
-  .kv div { display: flex; justify-content: space-between; border-bottom: 1px dashed #1d1d1d; padding: 2.5px 0; }
-  .kv .k { color: var(--dim); font-size: 9.5px; }
-  .kv .v { font-weight: 600; font-size: 10.5px; }
-  #valBox { margin: 6px; padding: 8px 10px; border: 1px solid var(--bd2); background: var(--panel2); }
-  #valVerdict { font-size: 15px; font-weight: 700; letter-spacing: .06em; }
-  .newsline { padding: 3px 8px; border-bottom: 1px solid #161616; font-size: 10.5px; line-height: 1.45; }
-  .newsline .t { color: var(--amb); font-size: 9px; margin-right: 6px; }
-  .newsline .s { color: var(--dim2); font-size: 9px; }
-
-  /* GLOBE */
-  #globeHost { width: 100%; height: 100%; position: relative; background: radial-gradient(circle at 50% 45%, #0a1420 0%, #000 75%); cursor: grab; }
-  #globeHost:active { cursor: grabbing; }
-  #globeOverlay { position: absolute; left: 8px; bottom: 6px; color: var(--dim); font-size: 9.5px; pointer-events: none; }
-  .sess { display: flex; justify-content: space-between; padding: 3px 8px; border-bottom: 1px solid #161616; font-size: 10px; }
-  .sess .d { font-weight: 700; }
-
-  /* PORT */
-  .bstat { border: 1px solid var(--bd); background: var(--panel2); padding: 5px 8px; }
-  .bstat .l { color: var(--dim); font-size: 8.5px; letter-spacing: .1em; }
-  .bstat .v { font-size: 12px; font-weight: 700; margin-top: 2px; }
-  #portTiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; padding: 6px; }
-  .ctl { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px; align-items: center; }
-  .btn { border: 1px solid var(--bd2); background: #111; color: var(--wht); padding: 5px 12px; font-size: 10px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
-  .btn:hover { border-color: var(--amb); color: var(--amb2); }
-  .btn.danger { border-color: var(--red); color: var(--red); }
-  .btn.danger:hover { background: #2a0705; }
-  .btn.ok { border-color: var(--grn); color: var(--grn); }
-  .btn.sm { padding: 1px 8px; font-size: 9px; }
-  input.riskin { width: 60px; background: #001a33; border: 1px solid var(--bd2); color: var(--yel); padding: 4px 6px; font-family: var(--mono); font-size: 10.5px; }
-  #pnlHost, #eqHost { width: 100%; height: 100%; min-height: 90px; }
-  #logTail { background: #050505; color: #4d9a63; font-size: 10px; white-space: pre-wrap; line-height: 1.45; padding: 6px 8px; }
-  .scanning::after { content: ""; animation: dots 1.5s steps(4) infinite; }
-  @keyframes dots { 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
-
-  /* pop-ins */
-  #pops { position: fixed; top: 84px; right: 12px; width: 300px; z-index: 90; display: flex; flex-direction: column; gap: 6px; }
-  .pop { background: #0d0d0dee; border: 1px solid var(--bd2); border-left: 4px solid var(--amb); padding: 7px 10px; animation: pin .3s, pout .5s 6s forwards; box-shadow: 0 8px 26px rgba(0,0,0,.7); }
-  .pop.opened { border-left-color: var(--grn); } .pop.skipped { border-left-color: var(--dim2); } .pop.error { border-left-color: var(--red); }
-  .pop .h { display: flex; justify-content: space-between; font-weight: 700; font-size: 11px; }
-  .pop .b { color: var(--dim); font-size: 9.5px; margin-top: 3px; line-height: 1.45; }
-  @keyframes pin { from { opacity: 0; transform: translateX(24px); } }
-  @keyframes pout { to { opacity: 0; transform: translateX(24px); } }
-
-  .banner { display: none; padding: 4px 10px; font-weight: 700; font-size: 10.5px; }
+  /* ---------------- control bar ---------------- */
+  #ctl {
+    display: flex; align-items: center; gap: 8px; padding: 6px 18px;
+    background: var(--panel2); border-bottom: 1px solid var(--bd); flex-shrink: 0; flex-wrap: wrap;
+  }
+  .btn {
+    background: var(--panel); border: 1px solid var(--bd2); color: var(--txt); padding: 5px 11px;
+    font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .03em; cursor: pointer; border-radius: 3px;
+  }
+  .btn:hover { border-color: var(--dim); }
+  .btn.danger { color: var(--red); border-color: #4a2323; } .btn.danger:hover { background: #1a0e0e; }
+  .btn.ok { color: var(--grn); border-color: #1e3a2c; } .btn.ok:hover { background: #0d1a13; }
+  .riskin { width: 60px; background: var(--panel); border: 1px solid var(--bd2); color: var(--txt); padding: 5px 7px; border-radius: 3px; font: inherit; }
+  #cmdStatus { color: var(--amb); font-size: 10.5px; margin-left: 4px; }
+  .banner { display: none; padding: 6px 18px; font-weight: 700; font-size: 11.5px; letter-spacing: .03em; }
   .banner.show { display: block; }
-  .banner.halt { background: #2a0705; color: var(--red); border-bottom: 1px solid var(--red); }
-  .banner.warn { background: #241a00; color: var(--yel); border-bottom: 1px solid var(--yel); }
+  .banner.halt { background: #2a0d0d; color: #ff8b86; border-bottom: 1px solid #4a1f1f; }
+  .banner.warn { background: #2a220d; color: #ffcf7a; border-bottom: 1px solid #4a3d1f; }
 
-  #tvFrame { width: 100%; height: 100%; border: 0; background: #000; }
-  .tvsrc { display: flex; gap: 4px; padding: 4px 6px; }
+  /* ---------------- main grid ---------------- */
+  #main { flex: 1; display: grid; grid-template-columns: 300px 1fr 340px; gap: 1px; background: var(--bd); overflow: hidden; }
+  @media (max-width: 1100px) { #main { grid-template-columns: 1fr; overflow-y: auto; } .col { min-height: 320px; } }
+  .col { background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+  .col .hd {
+    padding: 9px 14px; border-bottom: 1px solid var(--bd); display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0; background: var(--panel);
+  }
+  .col .hd .t { font-size: 10.5px; font-weight: 800; letter-spacing: .13em; color: var(--cyn); }
+  .col .hd .r { color: var(--dim); font-size: 10px; }
+  .col .bd { flex: 1; overflow-y: auto; padding: 10px; }
+  .empty { color: var(--dim2); padding: 20px 8px; font-size: 11.5px; text-align: center; }
+
+  /* radar (purely decorative "always running" motion cue) */
+  .radar { width: 13px; height: 13px; position: relative; }
+  .radar::before, .radar::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--cyn);
+  }
+  .radar::before { animation: radarPing 2.2s ease-out infinite; }
+  .radar::after { opacity: .4; }
+  @keyframes radarPing { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+
+  /* ---------------- position cards ---------------- */
+  .pcard { border: 1px solid var(--bd2); background: var(--panel2); padding: 10px 12px; margin-bottom: 8px; border-radius: 4px; }
+  .pcard .r1 { display: flex; justify-content: space-between; align-items: baseline; }
+  .pcard .sym { font-size: 16px; font-weight: 800; }
+  .pcard .dir { font-size: 9px; font-weight: 700; letter-spacing: .08em; margin-left: 7px; padding: 1px 5px; border-radius: 2px; }
+  .pcard .dir.long { color: var(--grn); background: rgba(31,219,133,.12); } .pcard .dir.short { color: var(--red); background: rgba(255,91,86,.12); }
+  .pcard .pnl { font-size: 19px; font-weight: 800; }
+  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 5px; }
+  .pcard svg.spark { display: block; margin-top: 6px; width: 100%; height: 24px; }
+  .pcard .closebtn { margin-top: 7px; width: 100%; }
+  .pcard.flashu { animation: flashUp 1.1s; } .pcard.flashd { animation: flashDown 1.1s; }
+  @keyframes flashUp { 0% { background: rgba(31,219,133,.28); } 100% { background: var(--panel2); } }
+  @keyframes flashDown { 0% { background: rgba(255,91,86,.28); } 100% { background: var(--panel2); } }
+
+  /* ---------------- research cards ---------------- */
+  .rcard { border: 1px solid var(--bd2); background: var(--panel2); border-radius: 4px; padding: 10px 13px; margin-bottom: 8px; border-left: 3px solid var(--dim2); }
+  .rcard.rc-opened { border-left-color: var(--grn); }
+  .rcard.rc-skipped { border-left-color: var(--amb); }
+  .rcard.rc-no_signal { border-left-color: var(--bd2); }
+  .rcard.rc-holding { border-left-color: var(--cyn); }
+  .rcard.rc-error { border-left-color: var(--red); }
+  .rcard .r1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .rcard .sym { font-size: 15px; font-weight: 800; }
+  .rcard .nm { color: var(--dim); font-size: 10.5px; }
+  .rcard .px { margin-left: auto; font-weight: 700; font-size: 13px; }
+  .rcard .badge { font-size: 8.5px; font-weight: 800; letter-spacing: .08em; padding: 2px 6px; border-radius: 2px; text-transform: uppercase; }
+  .badge.opened { background: rgba(31,219,133,.15); color: var(--grn); }
+  .badge.skipped { background: rgba(240,169,59,.15); color: var(--amb); }
+  .badge.no_signal { background: rgba(124,134,152,.15); color: var(--dim); }
+  .badge.holding { background: rgba(63,200,255,.15); color: var(--cyn); }
+  .badge.market_closed { background: rgba(124,134,152,.1); color: var(--dim2); }
+  .badge.error { background: rgba(255,91,86,.15); color: var(--red); }
+  .rcard .sigs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 7px; }
+  .sig { font-size: 8.5px; font-weight: 700; padding: 2px 6px; border-radius: 2px; border: 1px solid var(--bd2); letter-spacing: .04em; cursor: default; }
+  .sig.bull { color: var(--grn); border-color: #1e3a2c; } .sig.bear { color: var(--red); border-color: #4a2323; } .sig.neutral { color: var(--dim2); }
+  .rcard .reason { color: var(--dim); font-size: 10.5px; margin-top: 6px; }
+  .rcard.rnew { animation: rIn .8s ease-out; }
+  @keyframes rIn { 0% { opacity: 0; transform: translateY(-6px); background: rgba(63,200,255,.12); } 100% { opacity: 1; transform: none; } }
+
+  /* ---------------- trade feed cards ---------------- */
+  .lcard { border: 1px solid var(--bd2); border-left: 4px solid var(--dim2); background: var(--panel2); padding: 9px 11px; margin-bottom: 8px; border-radius: 4px; }
+  .lcard.buy { border-left-color: var(--grn); } .lcard.sell { border-left-color: var(--red); }
+  .lcard .side { font-size: 12px; font-weight: 800; letter-spacing: .05em; }
+  .lcard.buy .side { color: var(--grn); } .lcard.sell .side { color: var(--red); }
+  .lcard .sym { font-size: 14px; font-weight: 800; margin-left: 8px; }
+  .lcard .meta { color: var(--dim); font-size: 10.5px; margin-top: 4px; }
+  .lcard .time { color: var(--dim2); font-size: 9px; float: right; }
+  .lcard.lnew { animation: lIn .9s ease-out; }
+  @keyframes lIn { 0% { transform: translateX(18px); opacity: 0; background: rgba(240,169,59,.25); } 60% { opacity: 1; } 100% { transform: none; background: var(--panel2); } }
+
+  #footer { padding: 5px 18px; color: var(--dim2); font-size: 9.5px; border-top: 1px solid var(--bd); display: flex; justify-content: space-between; flex-shrink: 0; }
 </style>
 </head>
 <body>
+<div id="app">
 
-<div id="cmdbar">
-  <div id="logo">FRIDAY<span style="font-size:8px; letter-spacing:.2em;">TERMINAL</span></div>
-  <input id="cmd" placeholder="Enter ticker or function  —  AAPL · EURUSD · BTC · WTI · GP · DES · N · PORT   then <GO>" autocomplete="off" spellcheck="false">
-  <button id="go">GO</button>
-  <div id="cmdhint">F: LIVE WEI GP DES N ECO GLOBE PORT DIAG</div>
-</div>
-
-<div id="status">
-  <span><span class="lbl">NY</span> <b id="clkNY" class="num">--:--:--</b></span>
-  <span><span class="lbl">LDN</span> <b id="clkLDN" class="num">--:--</b></span>
-  <span><span class="lbl">TYO</span> <b id="clkTYO" class="num">--:--</b></span>
-  <span class="sep">│</span>
-  <span><span class="lbl">EQUITY</span> <b id="stEq" class="num">--</b></span>
-  <span><span class="lbl">DAY P&L</span> <b id="stDay" class="num">--</b></span>
-  <span><span class="lbl">UNRLZD</span> <b id="stU" class="num">--</b></span>
-  <span class="sep">│</span>
-  <span><span id="botLight"></span><b id="stBot">BOT</b> <span id="stMode" class="amb"></span></span>
-  <span style="margin-left:auto" class="lbl" id="stReport"></span>
-</div>
-
-<div id="tape"><div id="tapeTrack"></div></div>
-
-<div id="heroBar">
-  <div class="hitem"><div class="hlbl">EQUITY</div><div class="hval num" id="hEq">--</div><div class="hsub" id="hReport">no bot reports yet</div></div>
-  <div class="hitem"><div class="hlbl">DAY P&amp;L</div><div class="hval num" id="hDay">--</div><div class="hsub" id="hDayPct">&nbsp;</div></div>
-  <div class="hitem"><div class="hlbl">OPEN TRADES UNREALIZED P&amp;L</div><div class="hval num" id="hU">--</div><div class="hsub" id="hUCount">0 positions</div></div>
-  <div class="hitem positions"><div class="hlbl">OPEN POSITIONS</div><div class="hval" id="hPosCount">--</div></div>
-</div>
-
-<div class="banner halt" id="killBanner">⛔ KILL-SWITCH ACTIVE — max drawdown tripped. No new trades until manual bot restart.</div>
-<div class="banner warn" id="haltBanner">⚠ DAILY LOSS LIMIT HIT — no new entries until tomorrow.</div>
-
-<div id="frame">
-  <div id="side">
-    <div id="menu">
-      <div class="mi" data-scr="live"><span class="n">1)</span>LIVE<span class="k">trade feed</span></div>
-      <div class="mi" data-scr="wei"><span class="n">2)</span>WEI<span class="k">world markets</span></div>
-      <div class="mi" data-scr="gp"><span class="n">3)</span>GP<span class="k">chart</span></div>
-      <div class="mi" data-scr="des"><span class="n">4)</span>DES<span class="k">analysis</span></div>
-      <div class="mi" data-scr="n"><span class="n">5)</span>N<span class="k">news + tv</span></div>
-      <div class="mi" data-scr="eco"><span class="n">6)</span>ECO<span class="k">calendar</span></div>
-      <div class="mi" data-scr="globe"><span class="n">7)</span>GLOBE<span class="k">world map</span></div>
-      <div class="mi" data-scr="port"><span class="n">8)</span>PORT<span class="k">bot command</span></div>
-      <div class="mi" data-scr="diag"><span class="n">9)</span>DIAG<span class="k">data health</span></div>
+  <div id="hdr">
+    <div id="brand">
+      <div class="dot" id="statusDot"></div>
+      <div>
+        <div class="name">FRIDAY <span style="color:var(--dim); font-weight:600;">/ Research Desk</span></div>
+        <div class="sub" id="statusSub">CONNECTING…</div>
+      </div>
     </div>
-    <div id="sideList"></div>
-  </div>
-
-  <div id="work">
-    <!-- WEI -->
-    <!-- LIVE: nothing but the bot's own buys/sells, animated as they happen -->
-    <div class="screen g-live" id="scr-live">
-      <div class="pn"><div class="hd">OPEN POSITIONS<span class="r" id="liveConn">--</span></div>
-        <div class="bd"><div id="livePositions"><div class="empty">No open positions.</div></div></div></div>
-      <div class="pn"><div class="hd">LIVE BUY / SELL FEED<span class="r" id="liveFeedUpd"></span></div>
-        <div class="bd"><div id="liveFeed"><div class="empty">Waiting for bot activity…</div></div></div></div>
-    </div>
-
-    <div class="screen g-wei" id="scr-wei">
-      <div class="pn" style="grid-row: span 2;"><div class="hd">WORLD MARKETS<span class="r" id="weiUpd"></span></div><div class="bd" id="weiTables"></div></div>
-      <div class="pn"><div class="hd">GLOBAL MAP</div><div class="bd" style="overflow:hidden" id="weiGlobeSlot"></div></div>
-      <div class="pn"><div class="hd">SESSIONS + MOVERS</div><div class="bd"><div id="sessList"></div><div class="sgh" style="border-top:1px solid var(--bd)">TOP MOVERS TODAY</div><div id="movers"></div></div></div>
-      <div class="pn"><div class="hd">HEADLINES<span class="r" id="newsAge"></span></div><div class="bd" id="weiNews"></div></div>
-      <div class="pn"><div class="hd">FRIDAY BOT</div><div class="bd" id="weiBot"></div></div>
-    </div>
-
-    <!-- GP -->
-    <div class="screen g-gp" id="scr-gp">
-      <div class="pn" style="grid-column: span 2;"><div class="bd" style="overflow:visible">
-        <div id="gpHead">
-          <span id="gpSym">--</span><span id="gpName"></span>
-          <span id="gpPx" class="num">--</span><span id="gpChg" class="num"></span>
-          <div class="tf" id="tfRow">
-            <button data-r="1d" class="on">1D</button><button data-r="5d">5D</button><button data-r="1mo">1M</button>
-            <button data-r="6mo">6M</button><button data-r="1y">1Y</button><button data-r="5y">5Y</button>
-          </div>
-        </div>
-      </div></div>
-      <div class="pn"><div class="hd">PRICE CHART<span class="r" id="gpSrc"></span></div><div class="bd" style="overflow:hidden"><div id="candleHost"></div></div></div>
-      <div class="pn"><div class="hd">QUOTE DETAIL</div><div class="bd"><div class="kv" id="gpStats"></div><div class="sgh">FRIDAY'S VIEW</div><div id="gpBot" style="padding:4px 8px; font-size:10px; line-height:1.5; color:#bcbcbc;"></div></div></div>
-    </div>
-
-    <!-- DES -->
-    <div class="screen g-des" id="scr-des">
-      <div class="pn" style="grid-column: span 3;"><div class="bd" style="overflow:visible">
-        <div id="gpHead" style="padding:6px 10px;">
-          <span id="desSym" style="font-size:17px; font-weight:700; color:var(--amb2)">--</span>
-          <span id="desName" style="color:var(--dim); font-size:10px;"></span>
-          <span id="desSector" style="color:var(--cyn); font-size:10px;"></span>
-          <span style="margin-left:auto" class="r" id="desUpd"></span>
-        </div>
-      </div></div>
-      <div class="pn"><div class="hd">BIAS — DAY / WEEK / MONTH</div><div class="bd">
-        <div class="biasrow" id="biasRow"></div>
-        <div class="sgh">VALUATION</div><div id="valBox"><div id="valVerdict">--</div><div id="valDetail" style="color:var(--dim); font-size:9.5px; margin-top:4px; line-height:1.5;"></div></div>
-        <div class="sgh">ANALYST CONSENSUS</div><div id="recBox" style="padding:6px 8px; font-size:10.5px;"></div>
-      </div></div>
-      <div class="pn"><div class="hd">KEY METRICS</div><div class="bd"><div class="kv" id="desMetrics"></div><div class="sgh">PROFILE</div><div id="desProfile" style="padding:4px 8px; color:var(--dim); font-size:10px; line-height:1.55;"></div></div></div>
-      <div class="pn" style="grid-row: span 2;"><div class="hd">COMPANY NEWS</div><div class="bd" id="desNews"></div></div>
-      <div class="pn" style="grid-column: span 2;"><div class="hd">SEC FILINGS — 10-K / 10-Q / 8-K</div><div class="bd" id="desFilings"></div></div>
-    </div>
-
-    <!-- N -->
-    <div class="screen g-n" id="scr-n">
-      <div class="pn" style="grid-row: span 2;"><div class="hd">LIVE NEWS WIRE<span class="r" id="nAge"></span></div><div class="bd" id="nList"></div></div>
-      <div class="pn"><div class="hd">LIVE TV</div><div class="bd" style="overflow:hidden; display:flex; flex-direction:column;">
-        <iframe id="tvFrame" title="Live market TV" allow="encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="origin"></iframe>
-        <div class="tvsrc">
-          <button class="cbtn on" data-vid="QB5BNdBFujE">BLOOMBERG BIZ</button>
-          <button class="cbtn" data-vid="aiQJKBvXjDk">BLOOMBERG 24/7</button>
-          <button class="cbtn" data-vid="KQp-e_XQnDE">YAHOO FIN</button>
-          <a id="tvLink" href="#" target="_blank" rel="noopener" style="margin-left:auto; font-size:9px; align-self:center;">open on YouTube ↗</a>
-        </div>
-      </div></div>
-      <div class="pn"><div class="hd">MARKET MOVING KEYWORDS</div><div class="bd" id="nMovers"></div></div>
-    </div>
-
-    <!-- ECO -->
-    <div class="screen g-eco" id="scr-eco">
-      <div class="pn"><div class="hd">ECONOMIC CALENDAR — US HIGH IMPACT (14D)</div><div class="bd" id="ecoEconomic"><div class="empty">loading…</div></div></div>
-      <div class="pn"><div class="hd">EARNINGS — WATCHLIST (14D)</div><div class="bd" id="ecoEarnings"><div class="empty">loading…</div></div></div>
-    </div>
-
-    <!-- GLOBE -->
-    <div class="screen g-globe" id="scr-globe">
-      <div class="pn"><div class="hd">GLOBAL MARKET MAP<span class="r">drag to rotate · scroll to zoom</span></div><div class="bd" style="overflow:hidden"><div id="globeHost"><div id="globeOverlay">NEW YORK — HOME BASE</div></div></div></div>
-      <div class="pn"><div class="hd">WORLD RIGHT NOW</div><div class="bd">
-        <div class="sgh">SESSIONS</div><div id="sessList2"></div>
-        <div class="sgh">COMMODITY HUBS · LIVE</div><div id="hubList"></div>
-        <div class="sgh">CRYPTO · 24/7</div><div id="cryptoList"></div>
-        <div class="sgh">RATES</div><div id="rateList"></div>
-      </div></div>
-    </div>
-
-    <!-- PORT -->
-    <div class="screen g-port" id="scr-port">
-      <div class="pn" style="grid-column: span 3;"><div class="bd" style="overflow:visible">
-        <div id="portTiles">
-          <div class="bstat"><div class="l">CONNECTION</div><div class="v" id="pConn">--</div></div>
-          <div class="bstat"><div class="l">MODE</div><div class="v" id="pMode">--</div></div>
-          <div class="bstat"><div class="l">STOCKS WIN</div><div class="v" id="pStk">--</div></div>
-          <div class="bstat"><div class="l">FX WIN</div><div class="v" id="pFx">--</div></div>
-          <div class="bstat"><div class="l">RISK/TRADE</div><div class="v" id="pRisk">--</div></div>
-          <div class="bstat"><div class="l">ACTIVITY</div><div class="v" id="pAct">--</div></div>
-        </div>
-        <div class="ctl">
-          <button class="btn danger" id="btnHalt">⛔ HALT BOT</button>
-          <button class="btn danger" id="btnCloseAll">CLOSE ALL POSITIONS</button>
-          <button class="btn" id="btnPause">⏸ PAUSE SCANNING</button>
-          <button class="btn ok" id="btnResume">▶ RESUME SCANNING</button>
-          <span class="lbl" style="color:var(--dim); margin-left:8px;">RISK %/TRADE</span>
-          <input class="riskin" id="riskIn" type="number" min="0.05" max="15" step="0.05">
-          <button class="btn" id="btnRisk">APPLY</button>
-          <span id="cmdStatus" style="color:var(--yel); font-size:9.5px;"></span>
-        </div>
-      </div></div>
-      <div class="pn"><div class="hd">OPEN POSITIONS — LIVE P&L</div><div class="bd"><table id="posTable"><thead><tr><th>INSTR</th><th></th><th>QTY</th><th>AVG</th><th>LAST</th><th>P&L</th><th></th></tr></thead><tbody></tbody></table><div class="empty" id="posEmpty">No open positions.</div></div></div>
-      <div class="pn"><div class="hd">LIVE P&L — TODAY<span class="r" id="pnlNow"></span></div><div class="bd" style="overflow:hidden"><div id="pnlHost"></div></div></div>
-      <div class="pn"><div class="hd">EQUITY CURVE</div><div class="bd" style="overflow:hidden"><div id="eqHost"><canvas id="equityChart"></canvas></div></div></div>
-      <div class="pn"><div class="hd">TRADE DECISIONS</div><div class="bd"><table id="decTable"><thead><tr><th>TIME</th><th>INSTR</th><th></th><th>DIR</th><th>STATUS</th><th>QTY</th><th>ENTRY</th><th>SIGNALS</th><th>REASON</th></tr></thead><tbody></tbody></table><div class="empty" id="decEmpty">No decisions yet.</div></div></div>
-      <div class="pn"><div class="hd">COMMAND LOG</div><div class="bd" id="cmdLog"><div class="empty">No commands sent.</div></div></div>
-      <div class="pn"><div class="hd">BOT LOG TAIL</div><div class="bd"><div id="logTail">waiting…</div></div></div>
-    </div>
-
-    <!-- DIAG -->
-    <div class="screen g-diag" id="scr-diag">
-      <div class="pn"><div class="hd">DATA SOURCE HEALTH</div><div class="bd" id="diagSrc"><div class="empty">run: press DIAG again to refresh</div></div></div>
-      <div class="pn"><div class="hd">STORE / FEED STATUS</div><div class="bd" id="diagStore"></div></div>
+    <div id="heroStats">
+      <div class="hstat"><span class="l">EQUITY</span><span class="v num" id="hEq">--</span></div>
+      <div class="hstat"><span class="l">DAY P&amp;L</span><span class="v num" id="hDay">--</span></div>
+      <div class="hstat"><span class="l">UNREALIZED</span><span class="v num" id="hU">--</span></div>
+      <div class="hstat"><span class="l">POSITIONS</span><span class="v num sm" id="hPos">--</span></div>
+      <div class="hstat"><span class="l">EQUITY CURVE</span><svg id="eqSpark"></svg></div>
     </div>
   </div>
-</div>
 
-<div id="pops"></div>
+  <div class="banner halt" id="killBanner">⛔ KILL-SWITCH ACTIVE — max drawdown tripped. No new trades until manual bot restart.</div>
+  <div class="banner warn" id="haltBanner">⚠ DAILY LOSS LIMIT HIT — no new entries until tomorrow.</div>
+
+  <div id="ctl">
+    <button class="btn danger" id="btnHalt">⛔ HALT BOT</button>
+    <button class="btn danger" id="btnCloseAll">CLOSE ALL POSITIONS</button>
+    <button class="btn" id="btnPause">⏸ PAUSE SCANNING</button>
+    <button class="btn ok" id="btnResume">▶ RESUME SCANNING</button>
+    <span style="color:var(--dim); font-size:10.5px; margin-left:6px;">RISK %/TRADE</span>
+    <input class="riskin" id="riskIn" type="number" min="0.05" max="15" step="0.05">
+    <button class="btn" id="btnRisk">APPLY</button>
+    <span id="cmdStatus"></span>
+    <span style="margin-left:auto; color:var(--dim); font-size:10px;" id="modeTag"></span>
+  </div>
+
+  <div id="main">
+    <div class="col" id="colPositions">
+      <div class="hd"><span class="t">OPEN POSITIONS</span><span class="r" id="posCount">0</span></div>
+      <div class="bd" id="positions"><div class="empty">No open positions.</div></div>
+    </div>
+
+    <div class="col" id="colResearch">
+      <div class="hd"><span class="t" style="display:flex; align-items:center; gap:8px;"><span class="radar"></span>LIVE RESEARCH — WHAT IT'S LOOKING AT</span><span class="r" id="researchUpd">--</span></div>
+      <div class="bd" id="research"><div class="empty">Waiting for the bot's first scan…</div></div>
+    </div>
+
+    <div class="col" id="colTrades">
+      <div class="hd"><span class="t">BUY / SELL FEED</span><span class="r" id="tradeUpd"></span></div>
+      <div class="bd" id="trades"><div class="empty">No trades yet.</div></div>
+    </div>
+  </div>
+
+  <div id="footer">
+    <span id="footLeft">FRIDAY research desk</span>
+    <span id="footRight"></span>
+  </div>
+</div>
 
 <script>
-/* =====================================================================
-   FRIDAY Terminal — Bloomberg-style function screens.
-   ===================================================================== */
 const $ = id => document.getElementById(id);
-const GROUPS = {
-  INDICES: [["SPX","S&P 500"],["NDX","NASDAQ COMP"],["NDX100","NASDAQ 100"],["DJI","DOW"],["RUT","RUSSELL 2K"],
-    ["SOX","PHLX SEMI"],["VIX","VIX"],["DXY","DOLLAR IX"],["FTSE","FTSE 100"],["DAX","DAX"],["CAC","CAC 40"],
-    ["NIKKEI","NIKKEI 225"],["HSI","HANG SENG"],["SSEC","SHANGHAI"],["SENSEX","SENSEX"]],
-  STOCKS: [["AAPL","Apple"],["MSFT","Microsoft"],["NVDA","NVIDIA"],["GOOGL","Alphabet"],["AMZN","Amazon"],["META","Meta"],
-    ["AVGO","Broadcom"],["ORCL","Oracle"],["CRM","Salesforce"],["ADBE","Adobe"],["AMD","AMD"],["INTC","Intel"],["CSCO","Cisco"],["IBM","IBM"],["QCOM","Qualcomm"],
-    ["JPM","JPMorgan"],["BAC","BofA"],["WFC","Wells Fargo"],["C","Citigroup"],["GS","Goldman"],["MS","Morgan Stanley"],["V","Visa"],["MA","Mastercard"],["AXP","Amex"],["BRK.B","Berkshire B"],
-    ["UNH","UnitedHealth"],["JNJ","J&J"],["LLY","Eli Lilly"],["PFE","Pfizer"],["ABBV","AbbVie"],["MRK","Merck"],["TMO","Thermo Fisher"],["ABT","Abbott"],
-    ["TSLA","Tesla"],["HD","Home Depot"],["NKE","Nike"],["MCD","McDonald's"],["SBUX","Starbucks"],["BKNG","Booking"],["LOW","Lowe's"],["TGT","Target"],
-    ["WMT","Walmart"],["PG","P&G"],["KO","Coca-Cola"],["PEP","PepsiCo"],["COST","Costco"],["PM","Philip Morris"],
-    ["BA","Boeing"],["CAT","Caterpillar"],["GE","GE"],["HON","Honeywell"],["UPS","UPS"],["RTX","RTX"],["DE","Deere"],
-    ["XOM","Exxon"],["CVX","Chevron"],["COP","ConocoPhillips"],["SLB","Schlumberger"],["EOG","EOG Resources"],
-    ["NFLX","Netflix"],["DIS","Disney"],["CMCSA","Comcast"],["T","AT&T"],["VZ","Verizon"],
-    ["LIN","Linde"],["FCX","Freeport"],["NEM","Newmont"],["NEE","NextEra"],["DUK","Duke Energy"],["PLD","Prologis"],["AMT","American Tower"],
-    ["SPY","S&P ETF"],["QQQ","NASDAQ ETF"],["DIA","DOW ETF"],["IWM","Russell ETF"],["VTI","Total Mkt ETF"]],
-  FX: [["EURUSD","EUR/USD"],["GBPUSD","GBP/USD"],["USDJPY","USD/JPY"],["USDCHF","USD/CHF"],["AUDUSD","AUD/USD"],["USDCAD","USD/CAD"],["NZDUSD","NZD/USD"],
-    ["EURGBP","EUR/GBP"],["EURJPY","EUR/JPY"],["EURCHF","EUR/CHF"],["EURAUD","EUR/AUD"],["EURCAD","EUR/CAD"],["EURNZD","EUR/NZD"],
-    ["GBPJPY","GBP/JPY"],["GBPCHF","GBP/CHF"],["GBPAUD","GBP/AUD"],["GBPCAD","GBP/CAD"],["GBPNZD","GBP/NZD"],
-    ["AUDJPY","AUD/JPY"],["AUDNZD","AUD/NZD"],["AUDCAD","AUD/CAD"],["AUDCHF","AUD/CHF"],["CADJPY","CAD/JPY"],["CHFJPY","CHF/JPY"]],
-  CRYPTO: [["BTC","Bitcoin"],["ETH","Ethereum"],["SOL","Solana"],["XRP","XRP"],["DOGE","Dogecoin"],["ADA","Cardano"]],
-  COMMODITIES: [["WTI","WTI Crude"],["BRENT","Brent"],["GOLD","Gold"],["SILVER","Silver"],["NATGAS","Nat Gas"],["COPPER","Copper"]],
-  RATES: [["US02Y","US 2Y"],["US10Y","US 10Y"],["US30Y","US 30Y"]],
-};
-const ALL_IDS = Object.values(GROUPS).flat().map(x => x[0]);
-const ID2NAME = Object.fromEntries(Object.values(GROUPS).flat());
-const FX_BOT = Object.fromEntries(GROUPS.FX.map(([id]) => [id, id.slice(0, 3) + "." + id.slice(3)]));
-const BOT_IDS = { ...Object.fromEntries(GROUPS.STOCKS.map(s => [s[0], s[0]])), ...FX_BOT };
-const FUNCS = ["LIVE","WEI","GP","DES","N","ECO","GLOBE","PORT","DIAG"];
-
-let quotes = {}, prevPx = {}, botState = null, selId = "AAPL", selRange = "1d";
-let lastInstrument = null;
 
 const fmtM = n => (typeof n !== "number" || isNaN(n)) ? "--" : n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-const dp = n => Math.abs(n) >= 1000 ? 2 : Math.abs(n) >= 10 ? 2 : Math.abs(n) >= 1 ? 4 : 5;
+const dp = n => Math.abs(n) >= 1000 ? 2 : Math.abs(n) >= 1 ? 4 : 5;
 const fmtP = (n, d) => (typeof n !== "number" || isNaN(n)) ? "--" : n.toLocaleString("en-US", { minimumFractionDigits: d ?? dp(n), maximumFractionDigits: d ?? dp(n) });
-const fmtBig = n => { if (typeof n !== "number" || isNaN(n)) return "--"; const a = Math.abs(n);
-  if (a >= 1e12) return (n/1e12).toFixed(2)+"T"; if (a >= 1e9) return (n/1e9).toFixed(2)+"B";
-  if (a >= 1e6) return (n/1e6).toFixed(1)+"M"; if (a >= 1e3) return (n/1e3).toFixed(1)+"K"; return String(Math.round(n)); };
 const cls = n => (typeof n !== "number") ? "" : n >= 0 ? "up" : "down";
 const sgn = n => (typeof n !== "number") ? "" : n >= 0 ? "+" : "";
-const ago = iso => { if (!iso) return ""; const s = Math.max(0,(Date.now()-new Date(iso))/1000);
-  return s<60?`${s|0}s`:s<3600?`${s/60|0}m`:`${s/3600|0}h`; };
-const tShort = iso => { try { return new Date(iso).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); } catch { return ""; } };
+const ago = iso => { if (!iso) return ""; const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  return s < 60 ? `${s | 0}s` : s < 3600 ? `${(s / 60) | 0}m` : `${(s / 3600) | 0}h`; };
+const tShort = iso => { try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); } catch { return ""; } };
 
-/* ---------------- screens & command line ---------------- */
-function showScreen(name) {
-  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
-  document.querySelectorAll(".mi").forEach(m => m.classList.toggle("on", m.dataset.scr === name));
-  const el = $("scr-" + name);
-  if (el) el.classList.add("on");
-  if (name === "gp") { setTimeout(() => { ensureCandle(); loadChart(); }, 30); }
-  if (name === "des") loadInstrument();
-  if (name === "eco") loadCalendar();
-  if (name === "diag") loadDiag();
-  if (name === "globe") setTimeout(placeGlobe, 30);
-  if (name === "wei") setTimeout(placeGlobe, 30);
-  if (name === "port") setTimeout(() => { renderPnl(botState?.equityHistory); renderEquity(botState?.equityHistory); }, 40);
-  location.hash = name;
-}
-document.querySelectorAll(".mi").forEach(m => m.onclick = () => showScreen(m.dataset.scr));
-
-function runCommand(raw) {
-  const parts = raw.trim().toUpperCase().split(/\s+/).filter(Boolean);
-  if (!parts.length) return;
-  let ticker = null, func = null;
-  for (const p of parts) {
-    if (FUNCS.includes(p)) func = p.toLowerCase();
-    else ticker = p.replace("/", "");
-  }
-  if (ticker) {
-    if (quotes[ticker] || ALL_IDS.includes(ticker)) selId = ticker;
-    else { selId = ticker; } // free-typed symbol — server will try
-    lastInstrument = null;
-  }
-  showScreen(func || (ticker ? "gp" : "wei"));
-  renderSide();
-}
-$("go").onclick = () => { runCommand($("cmd").value); $("cmd").value = ""; };
-$("cmd").addEventListener("keydown", e => { if (e.key === "Enter") { runCommand(e.target.value); e.target.value = ""; } });
-document.addEventListener("keydown", e => {
-  if (e.target === $("cmd") || e.target.tagName === "INPUT") return;
-  if (e.key === "/") { e.preventDefault(); $("cmd").focus(); }
-});
-
-/* ---------------- clocks + sessions ---------------- */
-const SESSIONS = [
-  { n: "NEW YORK", tz: "America/New_York", open: [9.5, 16] }, { n: "LONDON", tz: "Europe/London", open: [8, 16.5] },
-  { n: "TOKYO", tz: "Asia/Tokyo", open: [9, 15] }, { n: "SYDNEY", tz: "Australia/Sydney", open: [10, 16] },
-  { n: "FRANKFURT", tz: "Europe/Berlin", open: [9, 17.5] }, { n: "HONG KONG", tz: "Asia/Hong_Kong", open: [9.5, 16] },
-];
-function clockTick() {
-  const d = new Date();
-  const f = tz => d.toLocaleTimeString("en-US", { hour12: false, timeZone: tz, hour: "2-digit", minute: "2-digit" });
-  $("clkNY").textContent = d.toLocaleTimeString("en-US", { hour12: false, timeZone: "America/New_York" });
-  $("clkLDN").textContent = f("Europe/London"); $("clkTYO").textContent = f("Asia/Tokyo");
-  const rows = SESSIONS.map(s => {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone: s.tz, hour12: false, hour: "numeric", minute: "numeric", weekday: "short" }).formatToParts(d);
-    const get = t => parts.find(p => p.type === t)?.value;
-    const h = parseInt(get("hour")) + parseInt(get("minute")) / 60;
-    const wd = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(get("weekday"));
-    const open = wd >= 1 && wd <= 5 && h >= s.open[0] && h < s.open[1];
-    return `<div class="sess"><span>${s.n}</span><span class="d ${open ? "up" : ""}" style="${open ? "" : "color:var(--dim2)"}">${open ? "OPEN" : "CLOSED"}</span></div>`;
-  }).join("");
-  const s1 = $("sessList"), s2 = $("sessList2");
-  if (s1) s1.innerHTML = rows; if (s2) s2.innerHTML = rows;
-}
-setInterval(clockTick, 1000); clockTick();
-
-/* ---------------- quotes ---------------- */
-async function pollQuotes() {
-  try {
-    const res = await fetch("/api/quotes"); if (!res.ok) return;
-    const j = await res.json();
-    const fresh = j.quotes || {};
-    for (const [id, q] of Object.entries(fresh)) {
-      const prev = prevPx[id];
-      if (typeof prev === "number" && typeof q.price === "number" && q.price !== prev) {
-        document.querySelectorAll(`[data-q="${id}"]`).forEach(el => {
-          el.classList.remove("flash-up","flash-down"); void el.offsetWidth;
-          el.classList.add(q.price > prev ? "flash-up" : "flash-down");
-        });
-        if (id === selId) { $("gpPx").style.color = q.price > prev ? "var(--grn)" : "var(--red)"; setTimeout(() => $("gpPx").style.color = "", 600); }
-      }
-      if (typeof q.price === "number") prevPx[id] = q.price;
-    }
-    quotes = fresh;
-    $("weiUpd").textContent = "upd " + new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    renderSide(); renderWei(); renderTape(); renderGpHead(); renderHubs(); renderMovers();
-  } catch {}
-}
-setInterval(pollQuotes, 8000); pollQuotes();
-
-function rowHtml(id, label) {
-  const q = quotes[id];
-  const p = q?.changePct;
-  return `<div class="srow${id === selId ? " on" : ""}" data-q="${id}" data-id="${id}">` +
-    `<span class="s">${label || id}</span>` +
-    `<span class="p num">${q ? fmtP(q.price) + (q.unit || "") : "--"}</span>` +
-    `<span class="c num ${cls(p)}">${typeof p === "number" ? sgn(p) + p.toFixed(2) + "%" : ""}</span></div>`;
-}
-function renderSide() {
-  const host = $("sideList");
-  let html = "";
-  for (const [g, items] of Object.entries(GROUPS)) {
-    html += `<div class="sgh">${g}</div>`;
-    for (const [id] of items) html += rowHtml(id, id);
-  }
-  host.innerHTML = html;
-  host.querySelectorAll(".srow").forEach(r => r.onclick = () => { selId = r.dataset.id; lastInstrument = null; showScreen("gp"); renderSide(); });
-}
-function renderWei() {
-  const host = $("weiTables");
-  if (!host) return;
-  let html = "";
-  for (const [g, items] of Object.entries(GROUPS)) {
-    html += `<div class="sgh">${g}</div><table><tbody>`;
-    for (const [id, name] of items) {
-      const q = quotes[id]; const p = q?.changePct;
-      const isProxy = q && String(q.src || "").startsWith("proxy:");
-      const proxyTip = isProxy ? ` title="approximate -- tracked via ${q.src.slice(6)} ETF, real ${name} feed unavailable"` : "";
-      html += `<tr class="click" data-q="${id}" data-id="${id}"><td style="width:64px; font-weight:700;">${id}</td>` +
-        `<td style="color:var(--dim); font-size:9.5px;">${name}</td>` +
-        `<td class="num"${proxyTip} style="text-align:right; ${isProxy ? "color:var(--amber,#e6a23c);" : ""}">${q ? (isProxy ? "≈" : "") + fmtP(q.price) + (q.unit || "") : "--"}</td>` +
-        `<td class="num ${cls(q?.change)}" style="text-align:right;">${q && typeof q.change === "number" ? sgn(q.change) + fmtP(Math.abs(q.change)) : ""}</td>` +
-        `<td class="num ${cls(p)}" style="text-align:right; width:58px;">${typeof p === "number" ? sgn(p) + p.toFixed(2) + "%" : ""}</td></tr>`;
-    }
-    html += "</tbody></table>";
-  }
-  host.innerHTML = html;
-  host.querySelectorAll("tr.click").forEach(r => r.onclick = () => { selId = r.dataset.id; lastInstrument = null; showScreen("gp"); renderSide(); });
-}
-function renderTape() {
-  const chips = [];
-  for (const id of ALL_IDS) {
-    const q = quotes[id]; if (!q) continue;
-    const p = q.changePct;
-    chips.push(`<span class="tk" data-id="${id}"><b>${id}</b> <span class="num">${fmtP(q.price)}${q.unit || ""}</span> ` +
-      `<span class="num ${cls(p)}">${typeof p === "number" ? (p >= 0 ? "▲" : "▼") + Math.abs(p).toFixed(2) + "%" : ""}</span></span>`);
-  }
-  for (const e of botEvents.slice(0, 8)) chips.push(`<span class="tk"><b style="color:var(--cyn)">◈FRIDAY</b> <span style="color:var(--dim)">${e}</span></span>`);
-  if (!chips.length) chips.push('<span class="tk" style="color:var(--dim)">FRIDAY — waiting for market data…</span>');
-  const html = chips.join("");
-  $("tapeTrack").innerHTML = html + html;
-  $("tapeTrack").querySelectorAll(".tk[data-id]").forEach(t => t.onclick = () => { selId = t.dataset.id; lastInstrument = null; showScreen("gp"); renderSide(); });
-}
-function renderMovers() {
-  const host = $("movers"); if (!host) return;
-  const rows = ALL_IDS.map(id => ({ id, q: quotes[id] })).filter(x => typeof x.q?.changePct === "number")
-    .sort((a, b) => Math.abs(b.q.changePct) - Math.abs(a.q.changePct)).slice(0, 8);
-  host.innerHTML = rows.map(x => `<div class="srow" data-id="${x.id}"><span class="s">${x.id}</span>` +
-    `<span class="p num">${fmtP(x.q.price)}</span><span class="c num ${cls(x.q.changePct)}">${sgn(x.q.changePct)}${x.q.changePct.toFixed(2)}%</span></div>`).join("") || '<div class="empty">waiting for data…</div>';
-  host.querySelectorAll(".srow").forEach(r => r.onclick = () => { selId = r.dataset.id; showScreen("gp"); });
-}
-function renderHubs() {
-  const mk = (ids, host) => {
-    const el = $(host); if (!el) return;
-    el.innerHTML = ids.map(id => rowHtml(id, ID2NAME[id] || id)).join("");
-    el.querySelectorAll(".srow").forEach(r => r.onclick = () => { selId = r.dataset.id; showScreen("gp"); });
-  };
-  mk(["WTI","BRENT","GOLD","SILVER","NATGAS"], "hubList");
-  mk(["BTC","ETH","SOL"], "cryptoList");
-  mk(["US02Y","US10Y","US30Y"], "rateList");
-}
-
-/* ---------------- GP screen ---------------- */
-function renderGpHead() {
-  const q = quotes[selId];
-  $("gpSym").textContent = selId;
-  $("gpName").textContent = q?.name || ID2NAME[selId] || "";
-  const isGpProxy = q && String(q.src || "").startsWith("proxy:");
-  $("gpPx").textContent = q ? (isGpProxy ? "≈" : "") + fmtP(q.price) + (q.unit || "") : "--";
-  const c = $("gpChg");
-  if (q && typeof q.change === "number") {
-    c.textContent = `${sgn(q.change)}${fmtP(Math.abs(q.change))} (${sgn(q.changePct)}${(q.changePct ?? 0).toFixed(2)}%)`;
-    c.className = "num " + cls(q.change);
-  } else { c.textContent = ""; }
-  const st = $("gpStats");
-  const rows = [];
-  const add = (k, v) => { if (v != null && v !== "--") rows.push(`<div><span class="k">${k}</span><span class="v num">${v}</span></div>`); };
-  if (q) {
-    add("PREV CLOSE", fmtP(q.prevClose));
-    add("DAY RANGE", (q.dayLow != null && q.dayHigh != null) ? `${fmtP(q.dayLow)} – ${fmtP(q.dayHigh)}` : null);
-    add("SOURCE", q.src);
-    add("AS OF", q.t ? ago(q.t) + " ago" : null);
-  }
-  st.innerHTML = rows.join("");
-  const meta = BOT_IDS[selId];
-  const gb = $("gpBot");
-  if (!meta || !botState?.latest) { gb.innerHTML = '<span style="color:var(--dim2)">Not in the bot\'s scan universe.</span>'; return; }
-  const lines = [];
-  const pos = (botState.latest.positions || []).find(p => p.symbol === meta);
-  if (pos) {
-    let l = `● ${pos.quantity > 0 ? "LONG" : "SHORT"} ${Math.abs(pos.quantity).toLocaleString()} @ ${typeof pos.avgCost === "number" ? pos.avgCost.toFixed(5) : "?"}`;
-    if (typeof pos.unrealizedPnl === "number") l += ` — <b class="${cls(pos.unrealizedPnl)}">${sgn(pos.unrealizedPnl)}${fmtM(Math.abs(pos.unrealizedPnl))}</b>`;
-    lines.push(l);
-  }
-  for (const d of (botState.recentTrades || []).filter(t => t.symbol === meta).slice(-3).reverse()) {
-    lines.push(`${tShort(d.t)} ${(d.status || "").toUpperCase()} ${(d.direction || "").toUpperCase()}` +
-      (d.status === "opened" ? ` @${d.entry}` : d.reason ? ` — ${String(d.reason).slice(0, 50)}` : ""));
-    if (d.signals) lines.push(`<span style="color:var(--dim2)">  ${d.signals.split("|").join(" · ")}</span>`);
-  }
-  gb.innerHTML = lines.join("<br>") || '<span style="color:var(--dim2)">In universe — no decisions logged yet.</span>';
-}
-let lw = null, lwC = null, lwV = null;
-function ensureCandle() {
-  if (lw || typeof LightweightCharts === "undefined") return;
-  lw = LightweightCharts.createChart($("candleHost"), {
-    layout: { background: { color: "transparent" }, textColor: "#8a8a8a", fontFamily: "IBM Plex Mono", fontSize: 10 },
-    grid: { vertLines: { color: "#161616" }, horzLines: { color: "#161616" } },
-    rightPriceScale: { borderColor: "#2a2a2a" }, timeScale: { borderColor: "#2a2a2a", timeVisible: true },
-    crosshair: { mode: 0 }, autoSize: true,
-  });
-  lwC = lw.addCandlestickSeries({ upColor: "#00d26a", downColor: "#ff433d", borderUpColor: "#00d26a", borderDownColor: "#ff433d", wickUpColor: "#00d26a88", wickDownColor: "#ff433d88" });
-  lwV = lw.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
-  lw.priceScale("vol").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-}
-let chartLoadSeq = 0;
-async function loadChart() {
-  ensureCandle(); if (!lw) return;
-  const mySeq = ++chartLoadSeq;      // guards against an earlier slow request
-  const mySym = selId;               // landing after the user already switched symbols
-  $("gpSrc").textContent = "loading…";
-  const clear = () => { lwC.setData([]); lwV.setData([]); };
-  try {
-    const res = await fetch(`/api/chart?id=${encodeURIComponent(selId)}&range=${selRange}`);
-    if (mySeq !== chartLoadSeq || mySym !== selId) return; // a newer load has since started
-    if (!res.ok) { clear(); $("gpSrc").textContent = "no chart data for " + mySym; return; }
-    const j = await res.json();
-    if (mySeq !== chartLoadSeq || mySym !== selId) return;
-    if (!j.candles?.length) { clear(); $("gpSrc").textContent = "no chart data for " + mySym; return; }
-    lwC.setData(j.candles.map(c => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })));
-    lwV.setData(j.candles.map(c => ({ time: c.t, value: c.v, color: c.c >= c.o ? "#00d26a33" : "#ff433d33" })));
-    lw.timeScale().fitContent();
-    $("gpSrc").textContent = `${j.candles.length} bars · ${selRange}`;
-  } catch {
-    if (mySeq !== chartLoadSeq || mySym !== selId) return;
-    clear(); $("gpSrc").textContent = "chart error for " + mySym;
-  }
-}
-setInterval(() => { if (["1d","5d"].includes(selRange) && $("scr-gp").classList.contains("on")) loadChart(); }, 30000);
-document.querySelectorAll("#tfRow button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("#tfRow button").forEach(x => x.classList.remove("on"));
-  b.classList.add("on"); selRange = b.dataset.r; loadChart();
-});
-
-/* ---------------- DES screen ---------------- */
-let instLoadSeq = 0;
-const emptyInstrument = id => ({ id, cls: "stock", profile: null, metrics: null, recs: null, news: [], filings: [], dcf: null, valuation: null, bias: {} });
-async function loadInstrument() {
-  const mySeq = ++instLoadSeq;
-  const mySym = selId;
-  $("desSym").textContent = selId;
-  $("desName").textContent = quotes[selId]?.name || ID2NAME[selId] || "";
-  $("desUpd").textContent = "loading…";
-  if (lastInstrument?.id === selId) { renderInstrument(lastInstrument); return; }
-  try {
-    const res = await fetch(`/api/instrument?id=${encodeURIComponent(selId)}`);
-    if (mySeq !== instLoadSeq || mySym !== selId) return;
-    if (!res.ok) { lastInstrument = null; renderInstrument(emptyInstrument(mySym)); $("desUpd").textContent = "unavailable for " + mySym; return; }
-    const j = await res.json();
-    if (mySeq !== instLoadSeq || mySym !== selId) return;
-    lastInstrument = j;
-    renderInstrument(lastInstrument);
-  } catch {
-    if (mySeq !== instLoadSeq || mySym !== selId) return;
-    lastInstrument = null; renderInstrument(emptyInstrument(mySym)); $("desUpd").textContent = "error for " + mySym;
-  }
-}
-function biasCard(label, b) {
-  if (!b) return `<div class="bias"><div class="t">${label}</div><div class="v" style="color:var(--dim2)">N/A</div><div class="bar"></div></div>`;
-  const col = b.dir === "bullish" ? "var(--grn)" : b.dir === "bearish" ? "var(--red)" : "var(--dim)";
-  const w = Math.min(100, Math.abs(b.score));
-  const left = b.score >= 0 ? 50 : 50 - w / 2;
-  return `<div class="bias"><div class="t">${label}</div><div class="v" style="color:${col}">${b.dir.toUpperCase()}</div>` +
-    `<div class="bar"><i style="left:${left}%; width:${w / 2}%; background:${col}"></i></div>` +
-    `<div style="color:var(--dim2); font-size:8.5px; margin-top:3px; line-height:1.4;">${(b.notes || []).slice(0, 3).join(" · ")}</div></div>`;
-}
-function renderInstrument(d) {
-  $("desUpd").textContent = "as of " + new Date().toLocaleTimeString();
-  $("desSector").textContent = d.profile ? `${d.profile.finnhubIndustry || ""}` : "";
-  $("biasRow").innerHTML = biasCard("DAY", d.bias?.day) + biasCard("WEEK", d.bias?.week) + biasCard("MONTH", d.bias?.month);
-  const v = $("valVerdict"), vd = $("valDetail");
-  if (d.valuation) {
-    const col = d.valuation.verdict === "undervalued" ? "var(--grn)" : d.valuation.verdict === "overvalued" ? "var(--red)" : "var(--amb2)";
-    v.textContent = d.valuation.verdict.toUpperCase();
-    v.style.color = col;
-    vd.textContent = `Price ${d.valuation.pctVsDcf >= 0 ? "+" : ""}${d.valuation.pctVsDcf.toFixed(1)}% vs DCF fair value ${fmtM(d.dcf?.dcf)} · ${d.valuation.note}`;
-  } else { v.textContent = d.cls === "stock" ? "NO DCF DATA" : "N/A (" + d.cls.toUpperCase() + ")"; v.style.color = "var(--dim2)"; vd.textContent = d.cls === "stock" ? "Check FMP key / DIAG screen." : "Valuation models apply to individual companies, not " + d.cls + "."; }
-  const rec = $("recBox");
-  if (d.recs) {
-    const total = (d.recs.strongBuy||0)+(d.recs.buy||0)+(d.recs.hold||0)+(d.recs.sell||0)+(d.recs.strongSell||0);
-    rec.innerHTML = `<div style="display:flex; height:10px; margin-bottom:4px;">` +
-      `<i style="flex:${d.recs.strongBuy||0}; background:var(--grn)"></i><i style="flex:${d.recs.buy||0}; background:#0a8a4d"></i>` +
-      `<i style="flex:${d.recs.hold||0}; background:#666"></i><i style="flex:${d.recs.sell||0}; background:#a83232"></i>` +
-      `<i style="flex:${d.recs.strongSell||0}; background:var(--red)"></i></div>` +
-      `<span class="up">BUY ${(d.recs.strongBuy||0)+(d.recs.buy||0)}</span> · HOLD ${d.recs.hold||0} · <span class="down">SELL ${(d.recs.sell||0)+(d.recs.strongSell||0)}</span> <span style="color:var(--dim2)">(${total} analysts, ${d.recs.period||""})</span>`;
-  } else rec.innerHTML = '<span style="color:var(--dim2)">No analyst data.</span>';
-  const m = d.metrics || {};
-  const rows = [];
-  const add = (k, val) => { if (val != null && val === val) rows.push(`<div><span class="k">${k}</span><span class="v num">${val}</span></div>`); };
-  add("MKT CAP", m.marketCapitalization ? fmtBig(m.marketCapitalization * 1e6) : null);
-  add("P/E (TTM)", m.peTTM?.toFixed?.(2) ?? m.peBasicExclExtraTTM?.toFixed?.(2));
-  add("EPS (TTM)", m.epsTTM?.toFixed?.(2) ?? m.epsBasicExclExtraItemsTTM?.toFixed?.(2));
-  add("BETA", m.beta?.toFixed?.(2));
-  add("52W HIGH", m["52WeekHigh"] ? fmtP(m["52WeekHigh"]) : null);
-  add("52W LOW", m["52WeekLow"] ? fmtP(m["52WeekLow"]) : null);
-  add("DIV YIELD", m.dividendYieldIndicatedAnnual ? m.dividendYieldIndicatedAnnual.toFixed(2) + "%" : null);
-  add("ROE", m.roeTTM ? m.roeTTM.toFixed(1) + "%" : null);
-  add("NET MARGIN", m.netProfitMarginTTM ? m.netProfitMarginTTM.toFixed(1) + "%" : null);
-  add("REV GROWTH", m.revenueGrowthTTMYoy ? m.revenueGrowthTTMYoy.toFixed(1) + "%" : null);
-  add("GROSS MARGIN", m.grossMarginTTM ? m.grossMarginTTM.toFixed(1) + "%" : null);
-  add("D/E", m["totalDebt/totalEquityQuarterly"]?.toFixed?.(2));
-  $("desMetrics").innerHTML = rows.join("") || '<div class="empty">No fundamental metrics for this instrument type.</div>';
-  const pf = d.profile;
-  $("desProfile").innerHTML = pf ? `<b style="color:var(--wht)">${pf.name}</b> · ${pf.exchange || ""} · IPO ${pf.ipo || "?"} · ${pf.country || ""}` +
-    (pf.weburl ? ` · <a href="${pf.weburl}" target="_blank" rel="noopener">website ↗</a>` : "") : '<span style="color:var(--dim2)">No profile.</span>';
-  $("desNews").innerHTML = (d.news || []).map(n =>
-    `<div class="newsline"><span class="t">${tShort(n.publishedAt)}</span><a href="${n.link}" target="_blank" rel="noopener">${n.title}</a> <span class="s">${n.source || ""}</span></div>`
-  ).join("") || '<div class="empty">No company news available.</div>';
-  $("desFilings").innerHTML = (d.filings || []).length ?
-    `<table><thead><tr><th>FORM</th><th>DATE</th><th>DOCUMENT</th></tr></thead><tbody>` +
-    d.filings.map(f => `<tr><td style="color:var(--amb2); font-weight:700;">${f.form}</td><td>${f.date}</td><td><a href="${f.url}" target="_blank" rel="noopener">${f.title || "view"} ↗</a></td></tr>`).join("") +
-    "</tbody></table>" : '<div class="empty">No SEC filings (non-US-listed or non-equity instrument).</div>';
-}
-
-/* ---------------- N screen ---------------- */
-const HOT = /\b(FED|FOMC|RATE CUT|RATE HIKE|CPI|INFLATION|OPEC|TARIFF|WAR|SANCTION|JOBS|PAYROLL|GDP|TREASURY|YIELD|OIL|GOLD|CRASH|SURGE|PLUNGE)\b/i;
-let newsItems = [], newsUpdatedAt = null;
-async function pollNews() {
-  try {
-    const res = await fetch("/api/news"); if (!res.ok) return;
-    const j = await res.json();
-    newsItems = j.items || []; newsUpdatedAt = j.updatedAt;
-    const html = newsItems.slice(0, 50).map(n =>
-      `<div class="newsline"><span class="t">${tShort(n.publishedAt)}</span>` +
-      `<a href="${n.link}" target="_blank" rel="noopener" ${HOT.test(n.title) ? 'style="color:var(--yel)"' : ""}>${n.title}</a>` +
-      ` <span class="s">${n.source}</span></div>`).join("");
-    const l1 = $("nList"), l2 = $("weiNews");
-    if (l1) l1.innerHTML = html || '<div class="empty">No headlines.</div>';
-    if (l2) l2.innerHTML = newsItems.slice(0, 16).map(n =>
-      `<div class="newsline"><span class="t">${tShort(n.publishedAt)}</span><a href="${n.link}" target="_blank" rel="noopener">${n.title}</a></div>`).join("");
-    const hot = newsItems.filter(n => HOT.test(n.title)).slice(0, 15);
-    const nm = $("nMovers");
-    if (nm) nm.innerHTML = hot.map(n => `<div class="newsline"><span class="t">${tShort(n.publishedAt)}</span><a href="${n.link}" target="_blank" rel="noopener" style="color:var(--yel)">${n.title}</a></div>`).join("") || '<div class="empty">No high-impact keywords right now.</div>';
-    const stamp = newsUpdatedAt ? `updated ${ago(newsUpdatedAt)} ago` : "";
-    if ($("nAge")) $("nAge").textContent = stamp;
-    if ($("newsAge")) $("newsAge").textContent = stamp;
-  } catch {}
-}
-setInterval(pollNews, 45000); pollNews();
-function setTv(vid) { $("tvFrame").src = `https://www.youtube-nocookie.com/embed/${vid}?autoplay=0&rel=0`; $("tvLink").href = `https://www.youtube.com/watch?v=${vid}`; }
-document.querySelectorAll(".tvsrc .cbtn").forEach(b => b.onclick = () => {
-  document.querySelectorAll(".tvsrc .cbtn").forEach(x => x.classList.remove("on")); b.classList.add("on"); setTv(b.dataset.vid);
-});
-setTv("QB5BNdBFujE");
-
-/* ---------------- ECO ---------------- */
-let calLoaded = false;
-async function loadCalendar() {
-  if (calLoaded) return;
-  try {
-    const res = await fetch("/api/calendar"); if (!res.ok) return;
-    const j = await res.json(); calLoaded = true;
-    $("ecoEconomic").innerHTML = (j.economic || []).length ?
-      "<table><thead><tr><th>DATE</th><th>EVENT</th><th>IMPACT</th><th>EST</th><th>PREV</th></tr></thead><tbody>" +
-      j.economic.map(e => `<tr><td>${(e.date || "").slice(0, 16)}</td><td>${e.event}</td><td class="${e.impact === "High" ? "down" : "amb"}">${e.impact || ""}</td><td class="num">${e.estimate ?? ""}</td><td class="num">${e.previous ?? ""}</td></tr>`).join("") + "</tbody></table>"
-      : '<div class="empty">No economic calendar data (free-tier limits) — check DIAG.</div>';
-    $("ecoEarnings").innerHTML = (j.earnings || []).length ?
-      "<table><thead><tr><th>DATE</th><th>SYMBOL</th><th>EPS EST</th><th>TIME</th></tr></thead><tbody>" +
-      j.earnings.map(e => `<tr><td>${e.date}</td><td style="color:var(--amb2); font-weight:700;">${e.symbol}</td><td class="num">${e.epsEstimated ?? ""}</td><td>${e.time || ""}</td></tr>`).join("") + "</tbody></table>"
-      : '<div class="empty">No watchlist earnings in the next 14 days.</div>';
-  } catch {}
-}
-
-/* ---------------- GLOBE (interactive) ---------------- */
-const CENTERS = {
-  USD: { lat: 40.71, lon: -74.01, city: "New York" }, EUR: { lat: 50.11, lon: 8.68, city: "Frankfurt" },
-  GBP: { lat: 51.51, lon: -0.13, city: "London" }, JPY: { lat: 35.68, lon: 139.65, city: "Tokyo" },
-  CHF: { lat: 47.38, lon: 8.54, city: "Zurich" }, AUD: { lat: -33.87, lon: 151.21, city: "Sydney" },
-  CAD: { lat: 43.65, lon: -79.38, city: "Toronto" }, NZD: { lat: -41.29, lon: 174.78, city: "Wellington" },
+const SIGNAL_LABEL = {
+  market_structure: "STRUCT", support_resistance: "S/R", candlestick_pattern: "CANDLE",
+  volume_confirmation: "VOL", trend_filter: "TREND", momentum: "MOM", historical_regime: "HIST",
 };
-const HUBS = [
-  { lat: 29.76, lon: -95.37, city: "Houston", tag: "WTI OIL" }, { lat: 25.20, lon: 55.27, city: "Dubai", tag: "OIL" },
-  { lat: 1.35, lon: 103.82, city: "Singapore", tag: "TRADE HUB" }, { lat: 31.23, lon: 121.47, city: "Shanghai", tag: "METALS" },
-  { lat: 51.51, lon: -0.13, city: "London", tag: "GOLD·BRENT" },
-];
-let g = { ready: false };
-function latLon(lat, lon, r) {
-  const phi = (90 - lat) * Math.PI / 180, th = (lon + 180) * Math.PI / 180;
-  return new THREE.Vector3(-r * Math.sin(phi) * Math.cos(th), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(th));
+const DECISION_LABEL = {
+  opened: "TRADED", skipped: "SKIPPED", no_signal: "NO SIGNAL", holding: "HOLDING",
+  market_closed: "MARKET CLOSED", error: "ERROR",
+};
+
+function sparkSvg(values, w, h, strokeClass) {
+  if (!values || values.length < 2) return "";
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = (max - min) || 1;
+  const pts = values.map((v, i) => `${(i / (values.length - 1) * w).toFixed(1)},${(h - (v - min) / range * h).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" class="${strokeClass || ""}"/></svg>`;
 }
-function makeLabel(text, color) {
-  const cv = document.createElement("canvas"); const fs = 24;
-  const m = cv.getContext("2d"); m.font = `700 ${fs}px 'IBM Plex Mono', monospace`;
-  cv.width = Math.ceil(m.measureText(text).width) + 14; cv.height = fs + 10;
-  const c = cv.getContext("2d"); c.font = `700 ${fs}px 'IBM Plex Mono', monospace`;
-  c.fillStyle = "rgba(0,0,0,0.6)"; c.fillRect(0, 0, cv.width, cv.height);
-  c.fillStyle = color; c.fillText(text, 7, fs);
-  const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter;
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  spr.scale.set(cv.width * 0.0033, cv.height * 0.0033, 1);
-  return spr;
-}
-function initGlobe() {
-  if (typeof THREE === "undefined") return;
-  const host = $("globeHost");
-  const w = host.clientWidth || 600, h = host.clientHeight || 400;
-  g.scene = new THREE.Scene();
-  g.cam = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
-  g.cam.position.set(0, 0.6, 5.6);
-  g.ren = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  g.ren.setSize(w, h); g.ren.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  host.appendChild(g.ren.domElement);
-  g.group = new THREE.Group(); g.scene.add(g.group);
-  const R = 2; g.R = R;
-  const wire = new THREE.Mesh(new THREE.SphereGeometry(R, 36, 24), new THREE.MeshBasicMaterial({ color: 0x1e3a5f, wireframe: true, transparent: true, opacity: 0.35 }));
-  const inner = new THREE.Mesh(new THREE.SphereGeometry(R * 0.985, 36, 24), new THREE.MeshBasicMaterial({ color: 0x02060c, transparent: true, opacity: 0.75 }));
-  g.group.add(wire); g.group.add(inner);
-  new THREE.TextureLoader().setCrossOrigin("anonymous").load(
-    "https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-night.jpg",
-    tex => {
-      g.group.remove(wire); g.group.remove(inner);
-      g.group.add(new THREE.Mesh(new THREE.SphereGeometry(R, 64, 48), new THREE.MeshBasicMaterial({ map: tex })));
-      g.group.add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.045, 48, 32), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.06, side: THREE.BackSide })));
-    }, undefined, () => {});
-  for (const [k, c] of Object.entries(CENTERS)) {
-    const home = k === "USD"; const color = home ? 0x4fc3ff : 0x00d26a;
-    const dot = new THREE.Mesh(new THREE.SphereGeometry(home ? 0.05 : 0.032, 8, 8), new THREE.MeshBasicMaterial({ color }));
-    dot.position.copy(latLon(c.lat, c.lon, R * 1.012)); g.group.add(dot);
-    const lbl = makeLabel(`${c.city.toUpperCase()}·${k}`, home ? "#7dd7ff" : "#7df0ae");
-    lbl.position.copy(latLon(c.lat, c.lon, R * 1.16)); g.group.add(lbl);
-  }
-  for (const hb of HUBS) {
-    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfb8b1e }));
-    dot.position.copy(latLon(hb.lat, hb.lon, R * 1.012)); g.group.add(dot);
-    const lbl = makeLabel(`${hb.city.toUpperCase()}·${hb.tag}`, "#ffb454");
-    lbl.position.copy(latLon(hb.lat, hb.lon, R * 1.24)); g.group.add(lbl);
-  }
-  g.arcs = new THREE.Group(); g.group.add(g.arcs);
-  // interaction: drag to rotate, wheel to zoom
-  let dragging = false, px = 0, py = 0, idleT = null;
-  g.auto = true;
-  host.addEventListener("pointerdown", e => { dragging = true; px = e.clientX; py = e.clientY; g.auto = false; clearTimeout(idleT); });
-  window.addEventListener("pointerup", () => { dragging = false; clearTimeout(idleT); idleT = setTimeout(() => g.auto = true, 4000); });
-  window.addEventListener("pointermove", e => {
-    if (!dragging) return;
-    g.group.rotation.y += (e.clientX - px) * 0.005;
-    g.group.rotation.x = Math.max(-1.1, Math.min(1.1, g.group.rotation.x + (e.clientY - py) * 0.003));
-    px = e.clientX; py = e.clientY;
-  });
-  host.addEventListener("wheel", e => {
-    e.preventDefault();
-    g.cam.position.z = Math.max(3.1, Math.min(9, g.cam.position.z + e.deltaY * 0.004));
-  }, { passive: false });
-  g.ready = true;
-  (function anim() {
-    if (!g.ready) return;
-    requestAnimationFrame(anim);
-    if (g.auto) g.group.rotation.y += 0.0018;
-    g.arcs.children.forEach(a => {
-      a.userData.age++;
-      const life = a.userData.age / 120;
-      if (a.material) a.material.opacity = Math.max(0, 1 - life) * 0.95;
-      if (a.userData.pulse) {
-        a.userData.pulse.position.copy(a.userData.curve.getPoint(Math.min(1, life * 1.5)));
-        a.userData.pulse.material.opacity = Math.max(0, 1 - life);
-      }
-      if (life >= 1) { g.arcs.remove(a); if (a.userData.pulse) g.arcs.remove(a.userData.pulse); }
+
+/* ---------------- remote commands (safety controls) ---------------- */
+async function sendCommand(type, params, label) {
+  $("cmdStatus").textContent = "sending " + label + "…";
+  try {
+    const res = await fetch("/api/command", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, params: params || {} }),
     });
-    g.ren.render(g.scene, g.cam);
-  })();
-  new ResizeObserver(() => {
-    const host2 = $("globeHost");
-    const w2 = host2.clientWidth, h2 = host2.clientHeight;
-    if (!w2 || !h2) return;
-    g.cam.aspect = w2 / h2; g.cam.updateProjectionMatrix(); g.ren.setSize(w2, h2);
-  }).observe(host);
+    const j = await res.json();
+    $("cmdStatus").textContent = res.ok ? label + " queued — bot picks it up within a few seconds" : "error: " + (j.error || res.status);
+  } catch (e) { $("cmdStatus").textContent = "send failed: " + e.message; }
+  setTimeout(() => { $("cmdStatus").textContent = ""; }, 6000);
 }
-function placeGlobe() {
-  // the globe lives in one DOM node; WEI shows it too by moving the host
-  const target = $("scr-globe").classList.contains("on") ? document.querySelector("#scr-globe .bd") : $("weiGlobeSlot");
-  const host = $("globeHost");
-  if (target && host && host.parentElement !== target) target.appendChild(host);
-}
-function fireArc(destKey) {
-  if (!g.ready || !CENTERS[destKey] || destKey === "USD") { $("globeOverlay").textContent = "DOMESTIC TRADE — NEW YORK"; return; }
-  const from = latLon(CENTERS.USD.lat, CENTERS.USD.lon, g.R), to = latLon(CENTERS[destKey].lat, CENTERS[destKey].lon, g.R);
-  const mid = from.clone().add(to).multiplyScalar(0.5).normalize().multiplyScalar(g.R * 1.4);
-  const curve = new THREE.QuadraticBezierCurve3(from, mid, to);
-  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.009, 6, false), new THREE.MeshBasicMaterial({ color: 0xfb8b1e, transparent: true, opacity: 0.95 }));
-  tube.userData = { age: 0, curve };
-  const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00d26a, transparent: true }));
-  tube.userData.pulse = pulse;
-  g.arcs.add(tube); g.arcs.add(pulse);
-  $("globeOverlay").textContent = "TRADE ROUTED → " + CENTERS[destKey].city.toUpperCase();
-}
-initGlobe();
+$("btnHalt").onclick = () => { if (confirm("HALT the bot? No new trades until it's manually restarted.")) sendCommand("halt", {}, "HALT"); };
+$("btnCloseAll").onclick = () => { if (confirm("Close ALL open positions at market?")) sendCommand("close_all", {}, "CLOSE ALL"); };
+$("btnPause").onclick = () => sendCommand("pause_scanning", {}, "PAUSE");
+$("btnResume").onclick = () => sendCommand("resume_scanning", {}, "RESUME");
+$("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (!isFinite(v)) return; sendCommand("set_risk", { pct: v }, "risk " + v + "%"); };
 
-/* ---------------- PORT: bot state + commands ---------------- */
-let botEvents = [];
-const seenTrades = new Set();
-let firstState = true;
-const prevPosPnl = {}; // symbol -> last unrealizedPnl seen, for the LIVE screen's flash-on-change position cards
-
-/* ---------------- LIVE: big animated buy/sell feed + position cards ---------------- */
-function renderLivePositions(positions) {
-  const host = $("livePositions");
-  if (!host) return;
+/* ---------------- positions ---------------- */
+const prevPosPnl = {};
+let quotesCache = {};
+function renderPositions(positions) {
+  $("posCount").textContent = positions.length + (positions.length === 1 ? " position" : " positions");
+  $("hPos").textContent = positions.length;
+  const host = $("positions");
   if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return; }
-  const seenSyms = new Set();
+  const seen = new Set();
   host.innerHTML = positions.map(p => {
-    seenSyms.add(p.symbol);
+    seen.add(p.symbol);
     const isFx = p.secType === "CASH";
     const d2 = isFx ? (p.symbol?.endsWith(".JPY") ? 3 : 5) : 2;
     const fn = v => (typeof v === "number" && isFinite(v)) ? v.toFixed(d2) : "--";
@@ -959,267 +269,129 @@ function renderLivePositions(positions) {
     const prev = prevPosPnl[p.symbol];
     const flash = typeof prev === "number" && typeof pnl === "number" && pnl !== prev ? (pnl > prev ? "flashu" : "flashd") : "";
     prevPosPnl[p.symbol] = pnl;
+    const spark = quotesCache[p.symbol]?.spark;
     return `<div class="pcard ${flash}">` +
-      `<div class="prow1"><span><span class="psym">${p.display || p.symbol}</span>` +
-      `<span class="pdir ${p.quantity >= 0 ? "long" : "short"}">${p.quantity >= 0 ? "LONG" : "SHORT"} ${Math.abs(p.quantity).toLocaleString()}</span></span>` +
-      `<span class="ppnl ${cls(pnl)}">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</span></div>` +
-      `<div class="prow2"><span>AVG ${fn(p.avgCost)}</span><span>LAST ${fn(p.marketPrice)}</span>` +
-      `<span><button class="btn sm danger" data-lsym="${p.symbol}">CLOSE</button></span></div></div>`;
+      `<div class="r1"><span><span class="sym">${p.display || p.symbol}</span>` +
+      `<span class="dir ${p.quantity >= 0 ? "long" : "short"}">${p.quantity >= 0 ? "LONG" : "SHORT"} ${Math.abs(p.quantity).toLocaleString()}</span></span>` +
+      `<span class="pnl ${cls(pnl)}">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</span></div>` +
+      (spark ? sparkSvg(spark, 200, 24, cls(pnl)) : "") +
+      `<div class="r2"><span>AVG ${fn(p.avgCost)}</span><span>LAST ${fn(p.marketPrice)}</span></div>` +
+      `<button class="btn danger sm closebtn" data-sym="${p.symbol}">CLOSE</button></div>`;
   }).join("");
-  for (const sym of Object.keys(prevPosPnl)) if (!seenSyms.has(sym)) delete prevPosPnl[sym];
-  host.querySelectorAll("button[data-lsym]").forEach(b => b.onclick = () => {
-    if (confirm(`Close position ${b.dataset.lsym} at market?`)) sendCommand("close_position", { symbol: b.dataset.lsym }, "CLOSE " + b.dataset.lsym);
+  for (const sym of Object.keys(prevPosPnl)) if (!seen.has(sym)) delete prevPosPnl[sym];
+  host.querySelectorAll("button[data-sym]").forEach(b => b.onclick = () => {
+    if (confirm(`Close position ${b.dataset.sym} at market?`)) sendCommand("close_position", { symbol: b.dataset.sym }, "CLOSE " + b.dataset.sym);
   });
 }
-// {key, html} cache, newest-first. html never bakes in the "lnew" class --
-// that's applied only at render time for keys still in pendingNewKeys, so a
-// card's slide-in animation plays once (the poll it arrives on) instead of
-// replaying every poll just because we redraw the whole list from cache.
-let liveFeedEntries = [];
-const pendingNewKeys = new Set();
-function pushLiveFeedCard(t, key, prepend = true) {
-  const dir = String(t.direction || "").toUpperCase();
-  const isBuy = dir.includes("BUY") || dir.includes("LONG");
-  const isSell = dir.includes("SELL") || dir.includes("SHORT");
-  const sideClass = isBuy ? "buy" : isSell ? "sell" : "";
-  const html = `<div class="lcard ${sideClass}" data-key="${key}">` +
-    `<span class="lside">${dir || (t.status || "").toUpperCase()}</span>` +
-    `<span class="lsym">${t.display || t.symbol || ""}</span>` +
-    `<span class="lmeta">${t.status === "opened" ? `qty ${t.quantity ?? "--"} @ ${t.entry ?? "--"} · stop ${t.stop ?? "--"} / tgt ${t.target ?? "--"}` : (t.reason || t.status || "")}</span>` +
-    `<span class="lpx">${t.entry != null ? fmtP(Number(t.entry)) : ""}</span>` +
-    `<span class="ltime">${tShort(t.t)}</span></div>`;
-  if (prepend) liveFeedEntries.unshift({ key, html }); else liveFeedEntries.push({ key, html });
-  liveFeedEntries = liveFeedEntries.slice(0, 60);
-}
-function renderLiveFeed() {
-  const host = $("liveFeed");
-  if (!host) return;
-  host.innerHTML = liveFeedEntries.length
-    ? liveFeedEntries.map(e => pendingNewKeys.has(e.key) ? e.html.replace('class="lcard', 'class="lcard lnew') : e.html).join("")
-    : '<div class="empty">Waiting for bot activity…</div>';
-  pendingNewKeys.clear();
-  $("liveFeedUpd").textContent = liveFeedEntries.length ? "updated just now" : "";
-}
-function pop(t) {
-  const card = document.createElement("div");
-  card.className = "pop " + (t.status || "");
-  card.innerHTML = `<div class="h"><span>${t.display || t.symbol} ${(t.direction || "").toUpperCase()}</span>` +
-    `<span class="st-${t.status}">${(t.status || "").toUpperCase()}</span></div>` +
-    `<div class="b">${t.status === "opened" ? `qty ${t.quantity} @ ${t.entry} — stop ${t.stop} / tgt ${t.target}` : (t.reason || "")}<br>` +
-    `${(t.signals || "").split("|").join(" · ")}</div>`;
-  $("pops").prepend(card);
-  setTimeout(() => card.remove(), 6800);
-}
-function destFor(t) {
-  if (t.secType === "CASH" && t.display?.includes("/")) {
-    const [a, b] = t.display.split("/");
-    if (a !== "USD" && CENTERS[a]) return a;
-    if (b !== "USD" && CENTERS[b]) return b;
-  }
-  return "USD";
-}
-let eqChart = null;
-function renderEquity(eq) {
-  if (!eq?.length || typeof Chart === "undefined" || !$("scr-port").classList.contains("on")) return;
-  if (!eqChart) {
-    const ctx = $("equityChart").getContext("2d");
-    eqChart = new Chart(ctx, { type: "line",
-      data: { labels: [], datasets: [{ data: [], borderColor: "#fb8b1e", backgroundColor: "rgba(251,139,30,0.08)", fill: true, tension: .3, pointRadius: 0, borderWidth: 1.5 }] },
-      options: { responsive: true, maintainAspectRatio: false, animation: { duration: 250 }, plugins: { legend: { display: false } },
-        scales: { x: { ticks: { color: "#555", maxTicksLimit: 6, font: { family: "IBM Plex Mono", size: 8 } }, grid: { color: "#161616" } },
-                  y: { ticks: { color: "#555", font: { family: "IBM Plex Mono", size: 8 } }, grid: { color: "#161616" } } } } });
-  }
-  eqChart.data.labels = eq.map(p => tShort(p.t));
-  eqChart.data.datasets[0].data = eq.map(p => p.netLiquidation);
-  eqChart.update();
-}
-let pnlChart = null, pnlSeries = null;
-function renderPnl(eq) {
-  if (!eq?.length || typeof LightweightCharts === "undefined" || !$("scr-port").classList.contains("on")) return;
-  if (!pnlChart) {
-    pnlChart = LightweightCharts.createChart($("pnlHost"), {
-      layout: { background: { color: "transparent" }, textColor: "#8a8a8a", fontFamily: "IBM Plex Mono", fontSize: 9 },
-      grid: { vertLines: { color: "#161616" }, horzLines: { color: "#161616" } },
-      rightPriceScale: { borderColor: "#2a2a2a" }, timeScale: { borderColor: "#2a2a2a", timeVisible: true }, autoSize: true,
-    });
-    pnlSeries = pnlChart.addBaselineSeries({ baseValue: { type: "price", price: 0 },
-      topLineColor: "#00d26a", topFillColor1: "rgba(0,210,106,.3)", topFillColor2: "rgba(0,210,106,.03)",
-      bottomLineColor: "#ff433d", bottomFillColor1: "rgba(255,67,61,.03)", bottomFillColor2: "rgba(255,67,61,.3)", lineWidth: 2 });
-  }
-  const pts = []; let lastT = 0;
-  for (const p of eq) {
-    const t = Math.floor(new Date(p.t).getTime() / 1000);
-    if (!t || t <= lastT) continue;
-    pts.push({ time: t, value: (p.unrealizedPnl || 0) + (p.realizedPnlToday || 0) }); lastT = t;
-  }
-  if (!pts.length) return;
-  pnlSeries.setData(pts); pnlChart.timeScale().fitContent();
-  const nowV = pts[pts.length - 1].value;
-  $("pnlNow").textContent = (nowV >= 0 ? "+" : "") + fmtM(nowV);
-  $("pnlNow").style.color = nowV >= 0 ? "var(--grn)" : "var(--red)";
-}
-async function sendCommand(type, params, label) {
-  $("cmdStatus").textContent = "sending " + label + "…";
-  try {
-    const res = await fetch("/api/command", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, params }) });
-    const j = await res.json();
-    $("cmdStatus").textContent = res.ok ? label + " queued — bot picks it up within ~60s" : "rejected: " + (j.error || res.status);
-  } catch { $("cmdStatus").textContent = "failed to send"; }
-  loadCmdLog();
-}
-$("btnHalt").onclick = () => { if (confirm("HALT the bot? No new trades until you manually restart it on your Mac.")) sendCommand("halt", {}, "HALT"); };
-$("btnCloseAll").onclick = () => { if (confirm("Close ALL open positions at market?")) sendCommand("close_all", {}, "CLOSE ALL"); };
-$("btnPause").onclick = () => sendCommand("pause_scanning", {}, "PAUSE");
-$("btnResume").onclick = () => sendCommand("resume_scanning", {}, "RESUME");
-$("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (isFinite(v)) sendCommand("set_risk", { pct: v }, `RISK ${v}%`); };
-async function loadCmdLog() {
-  try {
-    const res = await fetch("/api/command-log"); if (!res.ok) return;
-    const j = await res.json();
-    $("cmdLog").innerHTML = (j.commands || []).length ?
-      j.commands.map(c => `<div class="newsline"><span class="t">${tShort(c.createdAt)}</span><b>${c.type.toUpperCase()}</b>` +
-        `${c.params?.symbol ? " " + c.params.symbol : ""}${c.params?.pct ? " " + c.params.pct + "%" : ""} — ` +
-        `<span class="${c.status === "done" ? "up" : c.status === "error" ? "down" : "amb"}">${c.status.toUpperCase()}</span>` +
-        `${c.detail ? ` <span class="s" style="color:var(--dim2)">${c.detail}</span>` : ""}</div>`).join("")
-      : '<div class="empty">No commands sent.</div>';
-  } catch {}
-}
-setInterval(loadCmdLog, 15000); loadCmdLog();
 
+/* ---------------- live research feed ---------------- */
+let lastResearchStamp = null;
+function renderResearch(latest) {
+  const log = latest?.researchLog || [];
+  const host = $("research");
+  if (!log.length) { host.innerHTML = '<div class="empty">Waiting for the bot&#39;s first scan…</div>'; return; }
+  const stamp = latest.botTimestamp || latest.receivedAt;
+  const isNewBatch = stamp !== lastResearchStamp;
+  lastResearchStamp = stamp;
+  $("researchUpd").textContent = "scan " + ago(stamp) + " ago · " + log.length + " instruments";
+
+  host.innerHTML = log.map(r => {
+    const decision = r.decision || "no_signal";
+    const sigs = (r.signals || []).map(s =>
+      `<span class="sig ${s.direction}" title="${(SIGNAL_LABEL[s.name] || s.name)}: ${s.reason}">${SIGNAL_LABEL[s.name] || s.name}</span>`
+    ).join("");
+    return `<div class="rcard rc-${decision}${isNewBatch ? " rnew" : ""}">` +
+      `<div class="r1"><span class="sym">${r.display || r.symbol}</span>` +
+      `<span class="nm">${r.secType === "CASH" ? "FX" : "STK"}</span>` +
+      (typeof r.price === "number" ? `<span class="px num">${fmtP(r.price)}</span>` : "") +
+      `<span class="badge ${decision}">${DECISION_LABEL[decision] || decision}</span></div>` +
+      (sigs ? `<div class="sigs">${sigs}</div>` : "") +
+      `<div class="reason">${r.reason || ""}</div></div>`;
+  }).join("");
+}
+
+/* ---------------- buy/sell trade feed ---------------- */
+const seenTrades = new Set();
+let firstState = true;
+function renderTrades(recentTrades) {
+  const trades = (recentTrades || []).slice().reverse().slice(0, 60);
+  const host = $("trades");
+  if (!trades.length) { host.innerHTML = '<div class="empty">No trades yet.</div>'; return; }
+  $("tradeUpd").textContent = trades.length + " recent";
+  host.innerHTML = trades.map(t => {
+    const key = `${t.t}|${t.symbol}|${t.status}|${t.quantity}`;
+    const isNew = !firstState && !seenTrades.has(key);
+    seenTrades.add(key);
+    const dir = String(t.direction || "").toUpperCase();
+    const isBuy = dir.includes("BUY") || dir.includes("LONG");
+    const isSell = dir.includes("SELL") || dir.includes("SHORT");
+    const sideClass = isBuy ? "buy" : isSell ? "sell" : "";
+    return `<div class="lcard ${sideClass}${isNew ? " lnew" : ""}">` +
+      `<span class="time">${tShort(t.t)}</span>` +
+      `<span class="side">${dir || (t.status || "").toUpperCase()}</span><span class="sym">${t.display || t.symbol || ""}</span>` +
+      `<div class="meta">${t.status === "opened" ? `qty ${t.quantity ?? "--"} @ ${t.entry ?? "--"} · stop ${t.stop ?? "--"} / tgt ${t.target ?? "--"}` : (t.reason || t.status || "")}</div></div>`;
+  }).join("");
+}
+
+/* ---------------- equity curve sparkline ---------------- */
+function renderEquitySpark(equityHistory) {
+  const svg = $("eqSpark");
+  const pts = (equityHistory || []).slice(-200).map(p => p.netLiquidation).filter(v => typeof v === "number");
+  if (pts.length < 2) { svg.innerHTML = ""; return; }
+  const up = pts[pts.length - 1] >= pts[0];
+  svg.setAttribute("viewBox", "0 0 110 26");
+  svg.innerHTML = sparkSvg(pts, 110, 26, up ? "up" : "down").replace(/^<svg[^>]*>|<\\/svg>$/g, "");
+}
+
+/* ---------------- main poll loop ---------------- */
 async function pollState() {
   let state;
   try {
-    const res = await fetch("/api/state"); if (!res.ok) throw 0;
+    const res = await fetch("/api/state");
+    if (!res.ok) throw 0;
     state = await res.json();
-  } catch { $("botLight").className = "bad"; $("stBot").textContent = "OFFLINE"; return; }
-  botState = state;
+  } catch { $("statusDot").className = "dot bad"; $("statusSub").textContent = "OFFLINE"; return; }
+
   const l = state.latest;
-  $("stReport").textContent = state.lastReportAt ? "bot report " + ago(state.lastReportAt) + " ago" : "no bot reports yet";
   if (l) {
     const stale = state.lastReportAt && (Date.now() - new Date(state.lastReportAt) > 5 * 60_000);
-    $("botLight").className = l.connected && !stale ? "ok" : "bad";
-    $("stBot").textContent = stale ? "STALE" : l.connected ? "LIVE" : "DOWN";
-    $("stMode").textContent = (l.mode || "").toUpperCase();
-    $("stMode").style.color = l.mode === "live" ? "var(--red)" : "var(--cyn)";
-    $("stEq").textContent = fmtM(l.netLiquidation);
-    const day = (l.unrealizedPnl || 0) + (l.realizedPnlToday || 0);
-    $("stDay").textContent = fmtM(day); $("stDay").className = "num " + cls(day);
-    $("stU").textContent = fmtM(l.unrealizedPnl); $("stU").className = "num " + cls(l.unrealizedPnl);
-    // Big, hard-to-miss account summary (mirrors the thin status-bar numbers above)
-    const posCount = (l.positions || []).length;
+    $("statusDot").className = "dot " + (l.connected && !stale ? "live" : "bad");
+    $("statusSub").textContent = (stale ? "STALE" : l.connected ? "LIVE" : "DOWN") + " · " +
+      (l.mode || "").toUpperCase() + " · report " + ago(state.lastReportAt) + " ago";
+    $("modeTag").textContent = (l.accountId || "") + " · " + (l.mode || "").toUpperCase();
+
     $("hEq").textContent = fmtM(l.netLiquidation);
-    $("hReport").textContent = state.lastReportAt ? "bot report " + ago(state.lastReportAt) + " ago" : "no bot reports yet";
-    $("hDay").textContent = (day >= 0 ? "+" : "") + fmtM(day); $("hDay").className = "hval num " + cls(day);
-    const dayStartEq = l.netLiquidation - day;
-    $("hDayPct").textContent = dayStartEq ? sgn(day) + Math.abs(day / dayStartEq * 100).toFixed(2) + "% today" : " ";
-    $("hU").textContent = (l.unrealizedPnl >= 0 ? "+" : "") + fmtM(l.unrealizedPnl); $("hU").className = "hval num " + cls(l.unrealizedPnl);
-    $("hUCount").textContent = posCount + (posCount === 1 ? " position" : " positions");
-    $("hPosCount").textContent = posCount;
+    const day = (l.unrealizedPnl || 0) + (l.realizedPnlToday || 0);
+    $("hDay").textContent = (day >= 0 ? "+" : "") + fmtM(day); $("hDay").className = "v num " + cls(day);
+    $("hU").textContent = (l.unrealizedPnl >= 0 ? "+" : "") + fmtM(l.unrealizedPnl); $("hU").className = "v num " + cls(l.unrealizedPnl);
+
     $("killBanner").classList.toggle("show", !!l.killSwitchTripped);
     $("haltBanner").classList.toggle("show", !!l.dailyHalted && !l.killSwitchTripped);
-    $("pConn").innerHTML = l.connected ? '<span class="up">CONNECTED</span>' : '<span class="down">DOWN</span>';
-    $("pMode").textContent = (l.mode || "?").toUpperCase();
-    $("pStk").innerHTML = l.withinStockTradingWindow ? '<span class="up">OPEN</span>' : "CLOSED";
-    $("pFx").innerHTML = l.withinForexTradingWindow ? '<span class="up">OPEN</span>' : "CLOSED";
-    $("pRisk").textContent = l.riskPerTradePct != null ? l.riskPerTradePct + "%" : "--";
     if (!$("riskIn").value && l.riskPerTradePct != null) $("riskIn").value = l.riskPerTradePct;
-    $("pAct").innerHTML = l.killSwitchTripped ? '<span class="down">HALTED</span>'
-      : l.scanningPaused ? '<span class="amb">PAUSED</span>'
-      : (l.withinStockTradingWindow || l.withinForexTradingWindow) ? '<span class="up scanning">SCANNING</span>' : "IDLE";
-    const wb = $("weiBot");
-    if (wb) wb.innerHTML = `<div class="kv">` +
-      `<div><span class="k">STATUS</span><span class="v ${l.connected ? "up" : "down"}">${l.connected ? "LIVE" : "DOWN"} · ${(l.mode || "").toUpperCase()}</span></div>` +
-      `<div><span class="k">EQUITY</span><span class="v num">${fmtM(l.netLiquidation)}</span></div>` +
-      `<div><span class="k">DAY P&L</span><span class="v num ${cls(day)}">${fmtM(day)}</span></div>` +
-      `<div><span class="k">POSITIONS</span><span class="v">${(l.positions || []).length}</span></div></div>` +
-      `<div style="padding:4px 8px;"><button class="btn sm" onclick="showScreen('port')">OPEN COMMAND CENTER →</button></div>`;
-    const tb = document.querySelector("#posTable tbody");
-    tb.innerHTML = "";
-    $("posEmpty").style.display = (l.positions || []).length ? "none" : "block";
-    for (const p of l.positions || []) {
-      const isFx = p.secType === "CASH";
-      const d2 = isFx ? (p.symbol?.endsWith(".JPY") ? 3 : 5) : 2;
-      const fn = v => (typeof v === "number" && isFinite(v)) ? v.toFixed(d2) : "--";
-      const pnl = p.unrealizedPnl;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td style="font-weight:700">${p.display || p.symbol}</td>` +
-        `<td><span class="tag ${isFx ? "fx" : "stk"}">${isFx ? "FX" : "STK"}</span></td>` +
-        `<td class="num ${p.quantity >= 0 ? "up" : "down"}">${Number(p.quantity).toLocaleString()}</td>` +
-        `<td class="num">${fn(p.avgCost)}</td><td class="num">${fn(p.marketPrice)}</td>` +
-        `<td class="num ${cls(pnl)}" style="font-weight:700">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</td>` +
-        `<td><button class="btn sm danger" data-sym="${p.symbol}">CLOSE</button></td>`;
-      tb.appendChild(tr);
-    }
-    tb.querySelectorAll("button[data-sym]").forEach(b => b.onclick = () => {
-      if (confirm(`Close position ${b.dataset.sym} at market?`)) sendCommand("close_position", { symbol: b.dataset.sym }, "CLOSE " + b.dataset.sym);
-    });
-    renderLivePositions(l.positions || []);
-    const lc = $("liveConn"); if (lc) lc.innerHTML = l.connected ? '<span class="up">LIVE</span>' : '<span class="down">DOWN</span>';
-  }
-  try { renderEquity(state.equityHistory); renderPnl(state.equityHistory); } catch {}
 
-  const trades = (state.recentTrades || []).slice().reverse();
-  const db = document.querySelector("#decTable tbody");
-  db.innerHTML = "";
-  $("decEmpty").style.display = trades.length ? "none" : "block";
-  for (const t of trades.slice(0, 80)) {
-    const key = `${t.t}|${t.symbol}|${t.status}|${t.quantity}`;
-    const isNew = !firstState && !seenTrades.has(key);
-    if (!seenTrades.has(key)) {
-      seenTrades.add(key);
-      if (isNew) {
-        pop(t);
-        if (t.status === "opened") fireArc(destFor(t));
-        botEvents.unshift(`${(t.status || "").toUpperCase()} ${t.display || t.symbol} @${t.entry || ""}`);
-        botEvents = botEvents.slice(0, 8);
-        renderTape();
-        pushLiveFeedCard(t, key, true);
-        pendingNewKeys.add(key);
-      } else if (firstState) {
-        pushLiveFeedCard(t, key, false);
-      }
-    }
-    const tr = document.createElement("tr");
-    if (isNew) tr.className = "newrow";
-    const isFx = t.secType === "CASH";
-    tr.innerHTML = `<td>${tShort(t.t)}</td><td style="font-weight:700">${t.display || t.symbol || ""}</td>` +
-      `<td><span class="tag ${isFx ? "fx" : "stk"}">${isFx ? "FX" : "STK"}</span></td>` +
-      `<td>${t.direction || ""}</td><td class="st-${t.status}">${t.status || ""}</td>` +
-      `<td class="num">${t.quantity ?? ""}</td><td class="num">${t.entry ?? ""}</td>` +
-      `<td title="${t.signals || ""}">${(t.signals || "").split("|").filter(Boolean).length || ""}</td>` +
-      `<td title="${t.reason || ""}" style="color:var(--dim)">${String(t.reason || "").slice(0, 34)}</td>`;
-    db.appendChild(tr);
+    renderPositions(l.positions || []);
+    renderResearch(l);
+  } else {
+    $("statusDot").className = "dot bad"; $("statusSub").textContent = "no bot reports yet";
   }
+  renderTrades(state.recentTrades);
+  renderEquitySpark(state.equityHistory);
   firstState = false;
-  renderLiveFeed();
-  $("logTail").textContent = (state.logTail || []).length ? state.logTail.join("\n") : "No log lines yet.";
-  const lt = $("logTail").parentElement; lt.scrollTop = lt.scrollHeight;
-  renderGpHead();
+  $("footRight").textContent = "state refreshed " + new Date().toLocaleTimeString();
 }
-setInterval(pollState, 4000); pollState();
 
-/* ---------------- DIAG ---------------- */
-async function loadDiag() {
-  $("diagSrc").innerHTML = '<div class="empty">checking sources…</div>';
+async function pollQuotes() {
   try {
-    const res = await fetch("/api/diag");
+    const res = await fetch("/api/quotes");
+    if (!res.ok) return;
     const j = await res.json();
-    $("diagSrc").innerHTML = "<table><tbody>" +
-      `<tr><td>FINNHUB KEY</td><td class="${j.keys.finnhub ? "up" : "down"}">${j.keys.finnhub ? "SET" : "MISSING"}</td></tr>` +
-      `<tr><td>FMP KEY</td><td class="${j.keys.fmp ? "up" : "down"}">${j.keys.fmp ? "SET" : "MISSING"}</td></tr>` +
-      Object.entries(j.sources).map(([k, v]) => `<tr><td>${k.toUpperCase()}</td><td class="${v === "OK" ? "up" : "down"}">${v}</td></tr>`).join("") +
-      "</tbody></table>";
-    $("diagStore").innerHTML = `<div class="kv">` +
-      `<div><span class="k">QUOTES CACHED</span><span class="v">${j.quotesCached}</span></div>` +
-      `<div><span class="k">NEWS ITEMS</span><span class="v">${j.newsItems}</span></div>` +
-      `<div><span class="k">NEWS UPDATED</span><span class="v">${j.newsUpdatedAt ? ago(j.newsUpdatedAt) + " ago" : "never"}</span></div></div>`;
-  } catch { $("diagSrc").innerHTML = '<div class="empty">diag failed</div>'; }
+    quotesCache = j.quotes || {};
+  } catch {}
 }
 
-/* ---------------- boot ---------------- */
-const initial = (location.hash || "#live").slice(1);
-showScreen(FUNCS.map(f => f.toLowerCase()).includes(initial) ? initial : "wei");
-renderSide();
+setInterval(() => pollState().catch(() => {}), 4000);
+setInterval(() => pollQuotes().catch(() => {}), 8000);
+pollState(); pollQuotes();
 </script>
 </body>
 </html>
