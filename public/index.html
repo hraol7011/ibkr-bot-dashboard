@@ -99,8 +99,15 @@
   .pcard .dir { font-size: 9px; font-weight: 700; letter-spacing: .08em; margin-left: 7px; padding: 1px 5px; border-radius: 2px; }
   .pcard .dir.long { color: var(--grn); background: rgba(31,219,133,.12); } .pcard .dir.short { color: var(--red); background: rgba(255,91,86,.12); }
   .pcard .pnl { font-size: 19px; font-weight: 800; }
-  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 5px; }
+  .pcard .r1b { display: flex; justify-content: space-between; align-items: baseline; margin-top: 1px; }
+  .pcard .lastpx { color: var(--dim); font-size: 11px; display: flex; align-items: center; gap: 5px; }
+  .pcard .livedot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim2); flex-shrink: 0; }
+  .pcard .livedot.on { background: var(--grn); box-shadow: 0 0 6px rgba(31,219,133,.9); animation: pulse 1.6s infinite; }
+  .pcard .pnlpct { font-size: 11px; font-weight: 700; }
   .pcard svg.spark { display: block; margin-top: 6px; width: 100%; height: 24px; }
+  .pcard .r2 { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 7px; }
+  .pcard .r3 { color: var(--dim2); font-size: 9.5px; margin-top: 4px; }
+  .pcard .r3 b { color: var(--dim); font-weight: 700; }
   .pcard .closebtn { margin-top: 7px; width: 100%; }
   .pcard.flashu { animation: flashUp 1.1s; } .pcard.flashd { animation: flashDown 1.1s; }
   @keyframes flashUp { 0% { background: rgba(31,219,133,.28); } 100% { background: var(--panel2); } }
@@ -254,28 +261,72 @@ $("btnRisk").onclick = () => { const v = parseFloat($("riskIn").value); if (!isF
 /* ---------------- positions ---------------- */
 const prevPosPnl = {};
 let quotesCache = {};
-function renderPositions(positions) {
+
+// Every entry the bot has ever opened, indexed by symbol -> most recent
+// {t, stop, target} -- lets a position card show what its own bracket order
+// is actually targeting instead of just quantity/avgCost. recentTrades is
+// capped (MAX_TRADES=500 server-side) so "most recent" is cheap to find.
+function latestOpenedBySymbol(recentTrades) {
+  const out = {};
+  for (const t of (recentTrades || [])) {
+    if (t.status !== "opened") continue;
+    const prev = out[t.symbol];
+    if (!prev || new Date(t.t) > new Date(prev.t)) out[t.symbol] = t;
+  }
+  return out;
+}
+
+function renderPositions(positions, recentTrades) {
   $("posCount").textContent = positions.length + (positions.length === 1 ? " position" : " positions");
   $("hPos").textContent = positions.length;
   const host = $("positions");
   if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return; }
+  const openedMap = latestOpenedBySymbol(recentTrades);
   const seen = new Set();
+  const nowMs = Date.now();
   host.innerHTML = positions.map(p => {
     seen.add(p.symbol);
     const isFx = p.secType === "CASH";
     const d2 = isFx ? (p.symbol?.endsWith(".JPY") ? 3 : 5) : 2;
     const fn = v => (typeof v === "number" && isFinite(v)) ? v.toFixed(d2) : "--";
-    const pnl = p.unrealizedPnl;
+
+    // Live tick from the Finnhub websocket, when we have one, takes over
+    // between the bot's own account-snapshot pushes so the card keeps
+    // moving second-to-second instead of jumping only every report cycle.
+    const q = quotesCache[p.symbol];
+    const tickIsFresh = q && q.t && (nowMs - new Date(q.t).getTime()) < 12_000;
+    const lastPrice = (tickIsFresh && typeof q.price === "number") ? q.price : p.marketPrice;
+    const qty = p.quantity;
+    const absQty = Math.abs(qty);
+    const haveCostBasis = typeof p.avgCost === "number" && absQty > 0;
+    const livePnl = (haveCostBasis && typeof lastPrice === "number")
+      ? (lastPrice - p.avgCost) * qty
+      : p.unrealizedPnl;
+    const pnl = typeof livePnl === "number" ? livePnl : p.unrealizedPnl;
+    const costBasis = haveCostBasis ? p.avgCost * absQty : null;
+    const mktValue = (typeof lastPrice === "number") ? lastPrice * absQty : null;
+    const pnlPct = (costBasis && costBasis !== 0) ? (pnl / costBasis) * 100 : null;
+
     const prev = prevPosPnl[p.symbol];
-    const flash = typeof prev === "number" && typeof pnl === "number" && pnl !== prev ? (pnl > prev ? "flashu" : "flashd") : "";
+    const flash = typeof prev === "number" && typeof pnl === "number" && Math.abs(pnl - prev) > 0.005 ? (pnl > prev ? "flashu" : "flashd") : "";
     prevPosPnl[p.symbol] = pnl;
-    const spark = quotesCache[p.symbol]?.spark;
+    const spark = q?.spark;
+    const liveOn = q && q.live && tickIsFresh;
+
+    const opened = openedMap[p.symbol];
+    const detailLine = opened
+      ? `opened <b>${ago(opened.t)} ago</b> · stop <b>${opened.stop ?? "--"}</b> / tgt <b>${opened.target ?? "--"}</b>`
+      : `avg cost <b>${fn(p.avgCost)}</b>`;
+
     return `<div class="pcard ${flash}">` +
       `<div class="r1"><span><span class="sym">${p.display || p.symbol}</span>` +
-      `<span class="dir ${p.quantity >= 0 ? "long" : "short"}">${p.quantity >= 0 ? "LONG" : "SHORT"} ${Math.abs(p.quantity).toLocaleString()}</span></span>` +
+      `<span class="dir ${qty >= 0 ? "long" : "short"}">${qty >= 0 ? "LONG" : "SHORT"} ${absQty.toLocaleString()}</span></span>` +
       `<span class="pnl ${cls(pnl)}">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</span></div>` +
+      `<div class="r1b"><span class="lastpx"><span class="livedot ${liveOn ? "on" : ""}"></span>LAST ${fn(lastPrice)}</span>` +
+      `<span class="pnlpct ${cls(pnlPct)}">${typeof pnlPct === "number" ? sgn(pnlPct) + fmtP(Math.abs(pnlPct), 2) + "%" : "--"}</span></div>` +
       (spark ? sparkSvg(spark, 200, 24, cls(pnl)) : "") +
-      `<div class="r2"><span>AVG ${fn(p.avgCost)}</span><span>LAST ${fn(p.marketPrice)}</span></div>` +
+      `<div class="r2"><span>AVG ${fn(p.avgCost)}</span><span>VALUE ${mktValue != null ? fmtM(mktValue) : "--"}</span><span>COST ${costBasis != null ? fmtM(costBasis) : "--"}</span></div>` +
+      `<div class="r3">${detailLine}</div>` +
       `<button class="btn danger sm closebtn" data-sym="${p.symbol}">CLOSE</button></div>`;
   }).join("");
   for (const sym of Object.keys(prevPosPnl)) if (!seen.has(sym)) delete prevPosPnl[sym];
@@ -344,6 +395,9 @@ function renderEquitySpark(equityHistory) {
 }
 
 /* ---------------- main poll loop ---------------- */
+let lastPositions = [];
+let lastRecentTrades = [];
+
 async function pollState() {
   let state;
   try {
@@ -369,7 +423,9 @@ async function pollState() {
     $("haltBanner").classList.toggle("show", !!l.dailyHalted && !l.killSwitchTripped);
     if (!$("riskIn").value && l.riskPerTradePct != null) $("riskIn").value = l.riskPerTradePct;
 
-    renderPositions(l.positions || []);
+    lastPositions = l.positions || [];
+    lastRecentTrades = state.recentTrades || [];
+    renderPositions(lastPositions, lastRecentTrades);
     renderResearch(l);
   } else {
     $("statusDot").className = "dot bad"; $("statusSub").textContent = "no bot reports yet";
@@ -380,17 +436,24 @@ async function pollState() {
   $("footRight").textContent = "state refreshed " + new Date().toLocaleTimeString();
 }
 
+let quoteFeedLive = false;
 async function pollQuotes() {
   try {
     const res = await fetch("/api/quotes");
     if (!res.ok) return;
     const j = await res.json();
     quotesCache = j.quotes || {};
+    quoteFeedLive = !!j.wsConnected;
+    $("footLeft").textContent = "FRIDAY research desk · quotes " + (quoteFeedLive ? "live (websocket)" : "delayed (rest fallback)");
+    // Re-render positions off every quote tick, not just every full state
+    // poll -- this is what makes the P&L actually move in real time instead
+    // of jumping once every few seconds.
+    if (lastPositions.length) renderPositions(lastPositions, lastRecentTrades);
   } catch {}
 }
 
-setInterval(() => pollState().catch(() => {}), 4000);
-setInterval(() => pollQuotes().catch(() => {}), 8000);
+setInterval(() => pollState().catch(() => {}), 2000);
+setInterval(() => pollQuotes().catch(() => {}), 1500);
 pollState(); pollQuotes();
 </script>
 </body>

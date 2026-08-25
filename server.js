@@ -129,6 +129,7 @@ app.post("/api/report", (req, res) => {
     ...researchLog.map(r => r.symbol),
   ].filter(Boolean));
   if (symbols.size) store.activeSymbols = Array.from(symbols).slice(0, 60);
+  wsSyncSubscriptions();
 
   saveStore();
   res.json({ ok: true });
@@ -152,10 +153,19 @@ app.post("/api/commands/ack", (req, res) => {
 });
 
 // ===========================================================================
-// Live quotes -- Finnhub only, scoped to whatever the bot is actually
+// Live quotes -- Finnhub, scoped to whatever the bot is actually
 // trading/researching (store.activeSymbols), learned from its own reports.
 // No hardcoded watchlist, no other data sources.
+//
+// Ticks come off Finnhub's WEBSOCKET (real push, not polling) so price
+// moves land in `quotes` the instant a trade prints -- this is what makes
+// the position cards feel genuinely live instead of refreshing on a timer.
+// A slow REST poll runs alongside it just to backfill prevClose/day-range
+// (the websocket only sends trade prints, not those fields) and to give
+// every symbol an initial price before its first tick arrives.
 // ===========================================================================
+const WebSocket = require("ws");
+
 async function finnhub(pathq) {
   if (!FINNHUB_KEY) throw new Error("no FINNHUB_KEY set");
   const res = await fetch(`https://finnhub.io/api/v1${pathq}${pathq.includes("?") ? "&" : "?"}token=${FINNHUB_KEY}`);
@@ -172,29 +182,46 @@ function toFinnhubSymbol(key) {
   }
   return key;
 }
+function fromFinnhubSymbol(fhSym) {
+  if (fhSym.startsWith("OANDA:")) {
+    const [base, quote] = fhSym.slice(6).split("_");
+    return `${base}.${quote}`;
+  }
+  return fhSym;
+}
 
-const quotes = {}; // key -> {price, change, changePct, prevClose, t, spark: number[]}
+const quotes = {}; // key -> {price, change, changePct, prevClose, dayHigh, dayLow, t, live, spark: number[]}
 const priceHistory = {}; // key -> [{t, price}], rolling -- powers the small inline sparklines only
-const MAX_HISTORY_POINTS = 600;
-function recordAndSetQuote(key, q) {
-  quotes[key] = { ...quotes[key], ...q, t: new Date().toISOString() };
+const MAX_HISTORY_POINTS = 900;
+function recordAndSetQuote(key, q, opts = {}) {
+  quotes[key] = { ...quotes[key], ...q, t: new Date().toISOString(), live: !!opts.live };
   if (typeof q.price === "number") {
     const arr = priceHistory[key] || (priceHistory[key] = []);
-    arr.push({ t: Math.floor(Date.now() / 1000), price: q.price });
+    arr.push({ t: Date.now(), price: q.price });
     if (arr.length > MAX_HISTORY_POINTS) arr.splice(0, arr.length - MAX_HISTORY_POINTS);
-    quotes[key].spark = arr.slice(-40).map(p => p.price);
+    quotes[key].spark = arr.slice(-60).map(p => p.price);
   }
 }
 
 let lastQuoteError = null;
-async function pollActiveQuotes() {
+let wsTickCount = 0;
+let wsConnectedAt = null;
+
+// ---- REST backfill: prevClose/day range + first price for brand-new symbols
+async function pollActiveQuotesRest() {
   const symbols = store.activeSymbols || [];
   for (const key of symbols) {
     try {
       const fhSym = toFinnhubSymbol(key);
       const q = await finnhub(`/quote?symbol=${encodeURIComponent(fhSym)}`);
       if (typeof q.c === "number" && q.c > 0) {
-        recordAndSetQuote(key, { price: q.c, change: q.d, changePct: q.dp, prevClose: q.pc, dayHigh: q.h, dayLow: q.l });
+        // Don't let a slow REST tick stomp a fresher websocket price -- only
+        // set `price` here if the websocket hasn't already primed this key.
+        const hasLiveTick = quotes[key] && quotes[key].live;
+        recordAndSetQuote(key, {
+          ...(hasLiveTick ? {} : { price: q.c }),
+          change: q.d, changePct: q.dp, prevClose: q.pc, dayHigh: q.h, dayLow: q.l,
+        }, { live: hasLiveTick });
       }
       lastQuoteError = null;
     } catch (e) {
@@ -202,8 +229,72 @@ async function pollActiveQuotes() {
     }
   }
 }
-setInterval(() => { pollActiveQuotes().catch(() => {}); }, 15_000);
-pollActiveQuotes().catch(() => {});
+setInterval(() => { pollActiveQuotesRest().catch(() => {}); }, 20_000);
+pollActiveQuotesRest().catch(() => {});
+
+// ---- Websocket: real-time trade prints, pushed the instant they happen
+let ws = null;
+let wsSubscribed = new Set();
+let wsReconnectDelay = 2000;
+
+function wsSubscribe(fhSym) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || wsSubscribed.has(fhSym)) return;
+  ws.send(JSON.stringify({ type: "subscribe", symbol: fhSym }));
+  wsSubscribed.add(fhSym);
+}
+function wsUnsubscribe(fhSym) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !wsSubscribed.has(fhSym)) return;
+  ws.send(JSON.stringify({ type: "unsubscribe", symbol: fhSym }));
+  wsSubscribed.delete(fhSym);
+}
+// Called whenever store.activeSymbols changes (see /api/report) so the feed
+// tracks whatever the bot is trading/researching right now, live.
+function wsSyncSubscriptions() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const want = new Set((store.activeSymbols || []).map(toFinnhubSymbol));
+  for (const fhSym of want) if (!wsSubscribed.has(fhSym)) wsSubscribe(fhSym);
+  for (const fhSym of Array.from(wsSubscribed)) if (!want.has(fhSym)) wsUnsubscribe(fhSym);
+}
+
+function connectFinnhubWs() {
+  if (!FINNHUB_KEY) return;
+  try {
+    ws = new WebSocket(`wss://ws.finnhub.io?token=${FINNHUB_KEY}`);
+  } catch (e) {
+    lastQuoteError = `ws construct failed: ${e.message || e}`;
+    return;
+  }
+  ws.on("open", () => {
+    wsConnectedAt = new Date().toISOString();
+    wsReconnectDelay = 2000;
+    wsSubscribed = new Set();
+    wsSyncSubscriptions();
+    console.log("Finnhub websocket connected.");
+  });
+  ws.on("message", (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw.toString()); } catch { return; }
+    if (msg.type !== "trade" || !Array.isArray(msg.data)) return;
+    for (const tick of msg.data) {
+      const key = fromFinnhubSymbol(tick.s);
+      if (typeof tick.p === "number") {
+        wsTickCount++;
+        recordAndSetQuote(key, { price: tick.p }, { live: true });
+      }
+    }
+  });
+  ws.on("error", (e) => { lastQuoteError = `ws error: ${e.message || e}`; });
+  ws.on("close", () => {
+    wsConnectedAt = null;
+    ws = null;
+    setTimeout(connectFinnhubWs, wsReconnectDelay);
+    wsReconnectDelay = Math.min(wsReconnectDelay * 1.6, 30_000);
+  });
+}
+connectFinnhubWs();
+// Belt-and-suspenders resync in case a subscribe call landed while the
+// socket was mid-reconnect and got silently dropped.
+setInterval(wsSyncSubscriptions, 15_000);
 
 // ===========================================================================
 // Viewer-facing endpoints (Basic auth)
@@ -211,7 +302,10 @@ pollActiveQuotes().catch(() => {});
 app.use(basicAuth({ users: { [DASHBOARD_USER]: DASHBOARD_PASSWORD }, challenge: true, realm: "friday-research-desk" }));
 
 app.get("/api/state", (req, res) => res.json(store));
-app.get("/api/quotes", (req, res) => res.json({ quotes, at: new Date().toISOString() }));
+app.get("/api/quotes", (req, res) => res.json({
+  quotes, at: new Date().toISOString(),
+  wsConnected: !!(ws && ws.readyState === WebSocket.OPEN),
+}));
 
 // Viewer issues a remote-control command for the bot.
 const COMMAND_TYPES = new Set(["close_position", "close_all", "halt", "pause_scanning", "resume_scanning", "set_risk"]);
@@ -250,6 +344,7 @@ app.get("/api/diag", async (req, res) => {
   out.activeSymbols = store.activeSymbols;
   out.quotesCached = Object.keys(quotes).length;
   out.lastReportAt = store.lastReportAt;
+  out.ws = { connectedAt: wsConnectedAt, subscribed: Array.from(wsSubscribed), tickCount: wsTickCount };
   res.json(out);
 });
 
