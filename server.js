@@ -413,6 +413,35 @@ async function pollYahooMisc() {
     } catch {}
   }
 }
+// Yahoo's chart API and the stooq CSV fallback both fail persistently from
+// Render's datacenter IP for cash-index symbols (^GSPC, ^DJI, etc. -- 429s),
+// even though the same code works fine for futures/ETF tickers. Rather than
+// leave these permanently blank, fall back to a highly-liquid, US-listed ETF
+// that tracks the same market and is reachable via Finnhub (which is
+// reliable). We deliberately do NOT scale the ETF's price into a fake index
+// level -- that would fabricate a number that looks like the real index but
+// isn't, which is dangerous on a live trading terminal. Instead we show the
+// ETF's own price/change/%change (the %change is what actually matters for
+// a terminal and tracks the real index closely) and mark the source as
+// "proxy:<ETF>" so the UI can flag it as approximate rather than authoritative.
+const INDEX_PROXY = {
+  SPX: "SPY", NDX: "QQQ", NDX100: "QQQ", DJI: "DIA", RUT: "IWM", SOX: "SOXX", DXY: "UUP",
+  FTSE: "EWU", DAX: "EWG", CAC: "EWQ", NIKKEI: "EWJ", HSI: "EWH", SSEC: "MCHI", SENSEX: "INDA",
+};
+async function pollIndexProxies() {
+  const now = Date.now();
+  for (const [id, etf] of Object.entries(INDEX_PROXY)) {
+    const q = quotes[id];
+    // Skip if we already have a fresh REAL (non-proxy) quote for this id --
+    // never let the approximate proxy clobber a working Yahoo/stooq value.
+    if (q && !String(q.src || "").startsWith("proxy:") && now - new Date(q.t).getTime() < 10 * 60_000) continue;
+    try {
+      const fq = await finnhub(`/quote?symbol=${etf}`);
+      if (typeof fq.c === "number" && fq.c > 0)
+        setQuote(id, { price: fq.c, change: fq.d, changePct: fq.dp, prevClose: fq.pc, dayHigh: fq.h, dayLow: fq.l, src: `proxy:${etf}` });
+    } catch (e) { logSrcError("finnhub", String(e.message || e)); }
+  }
+}
 async function pollTreasury() {
   try {
     const to = new Date().toISOString().slice(0, 10);
@@ -437,9 +466,11 @@ setInterval(() => { pollFinnhubStocks().catch(() => {}); }, 15_000);
 setInterval(() => { pollFinnhubFx().catch(() => {}); }, 20_000);
 setInterval(() => { pollCoinbase().catch(() => {}); }, 15_000);
 setInterval(() => { pollYahooMisc().catch(() => {}); }, 60_000);
+setInterval(() => { pollIndexProxies().catch(() => {}); }, 30_000);
 setInterval(() => { pollTreasury().catch(() => {}); }, 3600_000);
 pollFinnhubStocks().catch(() => {}); pollFinnhubFx().catch(() => {});
 pollCoinbase().catch(() => {}); pollYahooMisc().catch(() => {}); pollTreasury().catch(() => {});
+pollIndexProxies().catch(() => {});
 
 // ===========================================================================
 // Analysis helpers (bias engine)

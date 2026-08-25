@@ -523,9 +523,11 @@ function renderWei() {
     html += `<div class="sgh">${g}</div><table><tbody>`;
     for (const [id, name] of items) {
       const q = quotes[id]; const p = q?.changePct;
+      const isProxy = q && String(q.src || "").startsWith("proxy:");
+      const proxyTip = isProxy ? ` title="approximate -- tracked via ${q.src.slice(6)} ETF, real ${name} feed unavailable"` : "";
       html += `<tr class="click" data-q="${id}" data-id="${id}"><td style="width:64px; font-weight:700;">${id}</td>` +
         `<td style="color:var(--dim); font-size:9.5px;">${name}</td>` +
-        `<td class="num" style="text-align:right;">${q ? fmtP(q.price) + (q.unit || "") : "--"}</td>` +
+        `<td class="num"${proxyTip} style="text-align:right; ${isProxy ? "color:var(--amber,#e6a23c);" : ""}">${q ? (isProxy ? "≈" : "") + fmtP(q.price) + (q.unit || "") : "--"}</td>` +
         `<td class="num ${cls(q?.change)}" style="text-align:right;">${q && typeof q.change === "number" ? sgn(q.change) + fmtP(Math.abs(q.change)) : ""}</td>` +
         `<td class="num ${cls(p)}" style="text-align:right; width:58px;">${typeof p === "number" ? sgn(p) + p.toFixed(2) + "%" : ""}</td></tr>`;
     }
@@ -572,7 +574,8 @@ function renderGpHead() {
   const q = quotes[selId];
   $("gpSym").textContent = selId;
   $("gpName").textContent = q?.name || ID2NAME[selId] || "";
-  $("gpPx").textContent = q ? fmtP(q.price) + (q.unit || "") : "--";
+  const isGpProxy = q && String(q.src || "").startsWith("proxy:");
+  $("gpPx").textContent = q ? (isGpProxy ? "≈" : "") + fmtP(q.price) + (q.unit || "") : "--";
   const c = $("gpChg");
   if (q && typeof q.change === "number") {
     c.textContent = `${sgn(q.change)}${fmtP(Math.abs(q.change))} (${sgn(q.changePct)}${(q.changePct ?? 0).toFixed(2)}%)`;
