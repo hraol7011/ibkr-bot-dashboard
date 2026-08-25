@@ -51,6 +51,15 @@
   #tape { height: 22px; background: #050505; border-bottom: 1px solid var(--bd); overflow: hidden; white-space: nowrap; }
   #tapeTrack { display: inline-flex; height: 22px; align-items: center; animation: scrollT 55s linear infinite; }
   #tape:hover #tapeTrack { animation-play-state: paused; }
+  #heroBar { display: flex; align-items: stretch; background: #030303; border-bottom: 2px solid var(--bd2); padding: 6px 16px; gap: 28px; flex-wrap: wrap; }
+  #heroBar .hitem { display: flex; flex-direction: column; justify-content: center; min-width: 130px; }
+  #heroBar .hlbl { color: var(--dim); font-size: 10px; letter-spacing: .14em; font-weight: 700; margin-bottom: 2px; }
+  #heroBar .hval { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--wht); }
+  #heroBar .hval.up { color: var(--grn); text-shadow: 0 0 14px rgba(0,210,106,.35); }
+  #heroBar .hval.down { color: var(--red); text-shadow: 0 0 14px rgba(255,67,61,.35); }
+  #heroBar .hsub { color: var(--dim2); font-size: 9.5px; margin-top: 1px; }
+  #heroBar .hitem.positions { justify-content: center; }
+  @media (max-width: 900px) { #heroBar .hval { font-size: 22px; } }
   @keyframes scrollT { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   .tk { padding: 0 14px; border-right: 1px solid #1a1a1a; font-size: 10px; cursor: pointer; }
   .tk b { color: var(--amb2); font-weight: 600; }
@@ -85,6 +94,9 @@
   .pn { background: var(--panel); border: 1px solid var(--bd); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .pn > .hd { background: var(--strip); color: var(--amb); font-size: 9.5px; font-weight: 700; letter-spacing: .14em; padding: 3px 8px; border-bottom: 1px solid var(--bd); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
   .pn > .hd .r { color: var(--dim); font-weight: 400; letter-spacing: .03em; }
+  #pnlNow { font-size: 18px; letter-spacing: 0; font-weight: 700; }
+  #posTable td:nth-child(6) { font-size: 15px; }
+  #posTable td:nth-child(1) { font-size: 12px; }
   .pn > .bd { flex: 1; overflow: auto; min-height: 0; }
 
   table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
@@ -204,6 +216,13 @@
 </div>
 
 <div id="tape"><div id="tapeTrack"></div></div>
+
+<div id="heroBar">
+  <div class="hitem"><div class="hlbl">EQUITY</div><div class="hval num" id="hEq">--</div><div class="hsub" id="hReport">no bot reports yet</div></div>
+  <div class="hitem"><div class="hlbl">DAY P&amp;L</div><div class="hval num" id="hDay">--</div><div class="hsub" id="hDayPct">&nbsp;</div></div>
+  <div class="hitem"><div class="hlbl">OPEN TRADES UNREALIZED P&amp;L</div><div class="hval num" id="hU">--</div><div class="hsub" id="hUCount">0 positions</div></div>
+  <div class="hitem positions"><div class="hlbl">OPEN POSITIONS</div><div class="hval" id="hPosCount">--</div></div>
+</div>
 
 <div class="banner halt" id="killBanner">⛔ KILL-SWITCH ACTIVE — max drawdown tripped. No new trades until manual bot restart.</div>
 <div class="banner warn" id="haltBanner">⚠ DAILY LOSS LIMIT HIT — no new entries until tomorrow.</div>
@@ -990,6 +1009,16 @@ async function pollState() {
     const day = (l.unrealizedPnl || 0) + (l.realizedPnlToday || 0);
     $("stDay").textContent = fmtM(day); $("stDay").className = "num " + cls(day);
     $("stU").textContent = fmtM(l.unrealizedPnl); $("stU").className = "num " + cls(l.unrealizedPnl);
+    // Big, hard-to-miss account summary (mirrors the thin status-bar numbers above)
+    const posCount = (l.positions || []).length;
+    $("hEq").textContent = fmtM(l.netLiquidation);
+    $("hReport").textContent = state.lastReportAt ? "bot report " + ago(state.lastReportAt) + " ago" : "no bot reports yet";
+    $("hDay").textContent = (day >= 0 ? "+" : "") + fmtM(day); $("hDay").className = "hval num " + cls(day);
+    const dayStartEq = l.netLiquidation - day;
+    $("hDayPct").textContent = dayStartEq ? sgn(day) + Math.abs(day / dayStartEq * 100).toFixed(2) + "% today" : " ";
+    $("hU").textContent = (l.unrealizedPnl >= 0 ? "+" : "") + fmtM(l.unrealizedPnl); $("hU").className = "hval num " + cls(l.unrealizedPnl);
+    $("hUCount").textContent = posCount + (posCount === 1 ? " position" : " positions");
+    $("hPosCount").textContent = posCount;
     $("killBanner").classList.toggle("show", !!l.killSwitchTripped);
     $("haltBanner").classList.toggle("show", !!l.dailyHalted && !l.killSwitchTripped);
     $("pConn").innerHTML = l.connected ? '<span class="up">CONNECTED</span>' : '<span class="down">DOWN</span>';
