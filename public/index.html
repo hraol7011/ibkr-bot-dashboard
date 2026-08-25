@@ -599,19 +599,28 @@ function ensureCandle() {
   lwV = lw.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "vol" });
   lw.priceScale("vol").applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 }
+let chartLoadSeq = 0;
 async function loadChart() {
   ensureCandle(); if (!lw) return;
+  const mySeq = ++chartLoadSeq;      // guards against an earlier slow request
+  const mySym = selId;               // landing after the user already switched symbols
   $("gpSrc").textContent = "loading…";
+  const clear = () => { lwC.setData([]); lwV.setData([]); };
   try {
     const res = await fetch(`/api/chart?id=${encodeURIComponent(selId)}&range=${selRange}`);
-    if (!res.ok) { $("gpSrc").textContent = "no chart data for " + selId; return; }
+    if (mySeq !== chartLoadSeq || mySym !== selId) return; // a newer load has since started
+    if (!res.ok) { clear(); $("gpSrc").textContent = "no chart data for " + mySym; return; }
     const j = await res.json();
-    if (!j.candles?.length) { $("gpSrc").textContent = "no chart data"; return; }
+    if (mySeq !== chartLoadSeq || mySym !== selId) return;
+    if (!j.candles?.length) { clear(); $("gpSrc").textContent = "no chart data for " + mySym; return; }
     lwC.setData(j.candles.map(c => ({ time: c.t, open: c.o, high: c.h, low: c.l, close: c.c })));
     lwV.setData(j.candles.map(c => ({ time: c.t, value: c.v, color: c.c >= c.o ? "#00d26a33" : "#ff433d33" })));
     lw.timeScale().fitContent();
     $("gpSrc").textContent = `${j.candles.length} bars · ${selRange}`;
-  } catch { $("gpSrc").textContent = "chart error"; }
+  } catch {
+    if (mySeq !== chartLoadSeq || mySym !== selId) return;
+    clear(); $("gpSrc").textContent = "chart error for " + mySym;
+  }
 }
 setInterval(() => { if (["1d","5d"].includes(selRange) && $("scr-gp").classList.contains("on")) loadChart(); }, 30000);
 document.querySelectorAll("#tfRow button").forEach(b => b.onclick = () => {
@@ -620,17 +629,27 @@ document.querySelectorAll("#tfRow button").forEach(b => b.onclick = () => {
 });
 
 /* ---------------- DES screen ---------------- */
+let instLoadSeq = 0;
+const emptyInstrument = id => ({ id, cls: "stock", profile: null, metrics: null, recs: null, news: [], filings: [], dcf: null, valuation: null, bias: {} });
 async function loadInstrument() {
+  const mySeq = ++instLoadSeq;
+  const mySym = selId;
   $("desSym").textContent = selId;
   $("desName").textContent = quotes[selId]?.name || ID2NAME[selId] || "";
   $("desUpd").textContent = "loading…";
   if (lastInstrument?.id === selId) { renderInstrument(lastInstrument); return; }
   try {
     const res = await fetch(`/api/instrument?id=${encodeURIComponent(selId)}`);
-    if (!res.ok) { $("desUpd").textContent = "unavailable"; return; }
-    lastInstrument = await res.json();
+    if (mySeq !== instLoadSeq || mySym !== selId) return;
+    if (!res.ok) { lastInstrument = null; renderInstrument(emptyInstrument(mySym)); $("desUpd").textContent = "unavailable for " + mySym; return; }
+    const j = await res.json();
+    if (mySeq !== instLoadSeq || mySym !== selId) return;
+    lastInstrument = j;
     renderInstrument(lastInstrument);
-  } catch { $("desUpd").textContent = "error"; }
+  } catch {
+    if (mySeq !== instLoadSeq || mySym !== selId) return;
+    lastInstrument = null; renderInstrument(emptyInstrument(mySym)); $("desUpd").textContent = "error for " + mySym;
+  }
 }
 function biasCard(label, b) {
   if (!b) return `<div class="bias"><div class="t">${label}</div><div class="v" style="color:var(--dim2)">N/A</div><div class="bar"></div></div>`;
