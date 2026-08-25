@@ -34,6 +34,27 @@ window.FridayGlobe = (function () {
     return Math.acos(Math.max(-1, Math.min(1, d)));
   }
 
+  // Sub-solar point: the lat/lon where the sun is directly overhead right now.
+  // Standard low-precision solar position -- accurate to a fraction of a
+  // degree, which is far more than a globe this size can show. This is what
+  // makes the day/night terminator line up with the real world.
+  function subsolarPoint(date) {
+    const d = date || new Date();
+    const start = Date.UTC(d.getUTCFullYear(), 0, 0);
+    const dayOfYear = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - start) / 864e5;
+    const utcHours = d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
+    // declination of the sun
+    const g = (2 * Math.PI / 365) * (dayOfYear - 1 + (utcHours - 12) / 24);
+    const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g)
+      - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g)
+      - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+    // equation of time (minutes) -> longitude correction
+    const eqTime = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g)
+      - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+    const lon = -15 * (utcHours - 12 + eqTime / 60);
+    return { lat: decl / DEG, lon: ((lon + 180) % 360 + 360) % 360 - 180 };
+  }
+
   function create(canvas, opts = {}) {
     const ctx = canvas.getContext("2d");
     const state = {
@@ -41,9 +62,14 @@ window.FridayGlobe = (function () {
       autoSpin: true, spinSpeed: 0.055,   // radians/sec
       dragging: false, lastX: 0, lastY: 0, moved: 0,
       resumeAt: 0,
-      markers: [], arcs: [], hover: null,
-      placing: false,
+      markers: [], arcs: [], hover: null, pins: [],
+      placing: false, showNight: true,
       cx: 0, cy: 0, R: 10, dpr: 1,
+      stars: Array.from({ length: 220 }, () => ({
+        // fixed star field in screen space; regenerated on resize
+        u: Math.random(), v: Math.random(), r: Math.random() * 1.1 + 0.2, a: Math.random() * 0.5 + 0.2,
+        tw: Math.random() * Math.PI * 2,
+      })),
     };
     const listeners = { markerclick: [], surfaceclick: [] };
     const on = (ev, fn) => { (listeners[ev] || (listeners[ev] = [])).push(fn); };
@@ -103,32 +129,40 @@ window.FridayGlobe = (function () {
         state.lastX = e.clientX; state.lastY = e.clientY;
         state.autoSpin = false; state.resumeAt = performance.now() + 2500;
       } else {
-        // hover hit-test against markers
-        let best = null, bestD = 16;
-        for (const m of state.markers) {
-          const p = project(m.vec);
-          if (p.depth <= 0) continue;
-          const d = Math.hypot(p.x - mx, p.y - my);
-          if (d < bestD) { bestD = d; best = m; }
-        }
-        state.hover = best;
-        canvas.style.cursor = best ? "pointer" : (state.placing ? "crosshair" : "grab");
+        const hit = hitTest(mx, my);
+        state.hover = hit && hit.type === "marker" ? hit.item : null;
+        canvas.style.cursor = hit ? "pointer" : (state.placing ? "crosshair" : "grab");
       }
     });
+    // Markers win ties over pins: the venue is the thing you act on, the pin
+    // is context sitting at the same city.
+    function hitTest(mx, my) {
+      let best = null, bestD = 16, type = null;
+      for (const m of state.markers) {
+        const p = project(m.vec);
+        if (p.depth <= 0) continue;
+        const d = Math.hypot(p.x - mx, p.y - my);
+        if (d < bestD) { bestD = d; best = m; type = "marker"; }
+      }
+      if (best) return { type, item: best };
+      for (const pin of state.pins) {
+        const p = project(pin.vec);
+        if (p.depth <= 0) continue;
+        const d = Math.hypot(p.x - mx, p.y - my);
+        if (d < bestD) { bestD = d; best = pin; type = "pin"; }
+      }
+      return best ? { type, item: best } : null;
+    }
+
     const endDrag = e => {
       if (!state.dragging) return;
       state.dragging = false;
       if (state.moved < 5) {                      // a click, not a drag
         const r = canvas.getBoundingClientRect();
         const mx = e.clientX - r.left, my = e.clientY - r.top;
-        let best = null, bestD = 16;
-        for (const m of state.markers) {
-          const p = project(m.vec);
-          if (p.depth <= 0) continue;
-          const d = Math.hypot(p.x - mx, p.y - my);
-          if (d < bestD) { bestD = d; best = m; }
-        }
-        if (best) emit("markerclick", best);
+        const hit = hitTest(mx, my);
+        if (hit && hit.type === "marker") emit("markerclick", hit.item);
+        else if (hit && hit.type === "pin") emit("pinclick", hit.item);
         else {
           const ll = unproject(mx, my);
           if (ll) emit("surfaceclick", ll);
@@ -206,19 +240,140 @@ window.FridayGlobe = (function () {
       }
     }
 
+    function drawStars(now) {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      for (const s of state.stars) {
+        const tw = 0.65 + 0.35 * Math.sin(now / 900 + s.tw);
+        ctx.globalAlpha = s.a * tw;
+        ctx.beginPath(); ctx.arc(s.u * w, s.v * h, s.r, 0, 7);
+        ctx.fillStyle = "#cfe6ff"; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     function drawSphere() {
       const R = state.R * state.zoom;
-      const g = ctx.createRadialGradient(state.cx - R * 0.35, state.cy - R * 0.4, R * 0.05, state.cx, state.cy, R);
-      g.addColorStop(0, "#12304a");
-      g.addColorStop(0.55, "#0a1a2b");
+      // Base ocean, lit from the direction of the sun rather than a fixed
+      // corner, so the shading agrees with the terminator drawn below.
+      const sun = project(latLonToVec(state.sunLL.lat, state.sunLL.lon));
+      const lx = sun.depth > 0 ? sun.x : state.cx - R * 0.4;
+      const ly = sun.depth > 0 ? sun.y : state.cy - R * 0.4;
+      const g = ctx.createRadialGradient(lx, ly, R * 0.05, state.cx, state.cy, R * 1.15);
+      g.addColorStop(0, "#1b4a6b");
+      g.addColorStop(0.45, "#0d2438");
       g.addColorStop(1, "#050a12");
       ctx.beginPath(); ctx.arc(state.cx, state.cy, R, 0, 7); ctx.fillStyle = g; ctx.fill();
-      // atmosphere rim
+      // outer atmosphere halo
+      ctx.save();
+      const halo = ctx.createRadialGradient(state.cx, state.cy, R * 0.97, state.cx, state.cy, R * 1.16);
+      halo.addColorStop(0, "rgba(63,200,255,0.30)");
+      halo.addColorStop(1, "rgba(63,200,255,0)");
+      ctx.beginPath(); ctx.arc(state.cx, state.cy, R * 1.16, 0, 7); ctx.fillStyle = halo; ctx.fill();
+      ctx.restore();
       ctx.save();
       ctx.beginPath(); ctx.arc(state.cx, state.cy, R, 0, 7);
-      ctx.strokeStyle = "rgba(63,200,255,0.55)"; ctx.lineWidth = 1.5;
-      ctx.shadowColor = "rgba(63,200,255,0.9)"; ctx.shadowBlur = 22; ctx.stroke();
+      ctx.strokeStyle = "rgba(120,215,255,0.6)"; ctx.lineWidth = 1.4;
+      ctx.shadowColor = "rgba(63,200,255,0.9)"; ctx.shadowBlur = 20; ctx.stroke();
       ctx.restore();
+    }
+
+    // Night side: shade every visible point whose sun elevation is below the
+    // horizon. Drawn as a coarse dot mesh clipped to the globe -- cheap, and
+    // it reads as a proper terminator with a soft twilight band.
+    // Rendered into a small offscreen buffer and scaled up with smoothing:
+    // computing the shadow at ~110x110 and letting the GPU interpolate gives a
+    // soft, continuous terminator for a fraction of the per-pixel work, and
+    // avoids the visible grid a coarse fillRect mesh leaves behind.
+    const nightBuf = document.createElement("canvas");
+    nightBuf.width = nightBuf.height = 110;
+    const nctx = nightBuf.getContext("2d");
+    const nimg = nctx.createImageData(110, 110);
+
+    function drawNight() {
+      if (!state.showNight) return;
+      const R = state.R * state.zoom;
+      const sunVec = latLonToVec(state.sunLL.lat, state.sunLL.lon);
+      const N = 110, d = nimg.data;
+      const cxr = Math.cos(-state.rotX), sxr = Math.sin(-state.rotX);
+      const cyr = Math.cos(-state.rotY), syr = Math.sin(-state.rotY);
+      for (let j = 0; j < N; j++) {
+        const dy = 1 - (2 * (j + 0.5)) / N;          // +1 top .. -1 bottom
+        for (let i = 0; i < N; i++) {
+          const dx = (2 * (i + 0.5)) / N - 1;
+          const o = (j * N + i) * 4;
+          const r2 = dx * dx + dy * dy;
+          if (r2 > 1) { d[o + 3] = 0; continue; }
+          const dz = Math.sqrt(1 - r2);
+          // screen point -> world vector (inverse of project())
+          const y1 = dy * cxr - dz * sxr, z1 = dy * sxr + dz * cxr;
+          const x0 = dx * cyr - z1 * syr, z0 = dx * syr + z1 * cyr;
+          const elev = x0 * sunVec.x + y1 * sunVec.y + z0 * sunVec.z; // cos(sun zenith)
+          // day above +0.10, full night below -0.10, twilight ramp between
+          let a;
+          if (elev >= 0.10) a = 0;
+          else if (elev <= -0.10) a = 0.66;
+          else a = 0.66 * ((0.10 - elev) / 0.20);
+          d[o] = 1; d[o + 1] = 4; d[o + 2] = 12; d[o + 3] = Math.round(a * 255);
+        }
+      }
+      nctx.putImageData(nimg, 0, 0);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(state.cx, state.cy, R, 0, 7); ctx.clip();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(nightBuf, state.cx - R, state.cy - R, R * 2, R * 2);
+      ctx.restore();
+    }
+
+    // Warm pinpricks on the dark side, at the financial centres -- the
+    // "cities are awake" cue that makes a night side read as Earth.
+    function drawCityLights() {
+      if (!state.showNight) return;
+      const sunVec = latLonToVec(state.sunLL.lat, state.sunLL.lon);
+      for (const m of state.markers) {
+        const elev = m.vec.x * sunVec.x + m.vec.y * sunVec.y + m.vec.z * sunVec.z;
+        if (elev > 0.02) continue;
+        const p = project(m.vec);
+        if (p.depth <= 0) continue;
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.85, (0.02 - elev) * 3);
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, 7);
+        ctx.fillStyle = "#ffd9a0"; ctx.shadowColor = "#ffb74d"; ctx.shadowBlur = 10; ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // News / economic-event pins, sized and coloured by impact.
+    function drawPins(now) {
+      const COL = { High: "#ff4d4d", Medium: "#f0a93b", Low: "#7c8698", Holiday: "#7c8698" };
+      for (const pin of state.pins) {
+        const p = project(pin.vec);
+        if (p.depth <= 0) continue;
+        const col = COL[pin.impact] || COL.Low;
+        const big = pin.impact === "High";
+        if (big || pin.impact === "Medium") {
+          const t = ((now / (big ? 900 : 1600)) % 1);
+          ctx.save();
+          ctx.globalAlpha = (1 - t) * (big ? 0.8 : 0.45);
+          ctx.beginPath(); ctx.arc(p.x, p.y, 3 + t * (big ? 26 : 15), 0, 7);
+          ctx.strokeStyle = col; ctx.lineWidth = big ? 2 : 1.2; ctx.stroke();
+          ctx.restore();
+        }
+        // upward beacon so a hot market is visible even at small scale
+        if (big) {
+          ctx.save();
+          const up = project({ x: pin.vec.x * 1.16, y: pin.vec.y * 1.16, z: pin.vec.z * 1.16 });
+          ctx.globalAlpha = 0.5 + 0.3 * Math.sin(now / 300);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(up.x, up.y);
+          ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+          ctx.shadowColor = col; ctx.shadowBlur = 10; ctx.stroke();
+          ctx.restore();
+        }
+        ctx.save();
+        ctx.beginPath(); ctx.arc(p.x, p.y, big ? 4 : 3, 0, 7);
+        ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 12; ctx.fill();
+        ctx.restore();
+      }
     }
 
     function drawArcs(now) {
@@ -303,12 +458,20 @@ window.FridayGlobe = (function () {
       if (!state.dragging && !state.autoSpin && now > state.resumeAt) state.autoSpin = true;
       if (state.autoSpin && !state.dragging) state.rotY += state.spinSpeed * dt;
 
+      // recompute the sun every few seconds; it moves 15 deg/hour
+      if (!state.sunLL || now - (state.sunAt || 0) > 5000) {
+        state.sunLL = subsolarPoint(new Date()); state.sunAt = now;
+      }
       const w = canvas.clientWidth, h = canvas.clientHeight;
       ctx.clearRect(0, 0, w, h);
+      drawStars(now);
       drawSphere();
       drawLand();
       drawGraticule();
+      drawNight();
+      drawCityLights();
       drawArcs(now);
+      drawPins(now);
       drawMarkers(now);
       requestAnimationFrame(frame);
     }
@@ -331,12 +494,21 @@ window.FridayGlobe = (function () {
                           t0: performance.now(), span: angleBetween(a, b) / Math.PI });
         if (state.arcs.length > 40) state.arcs.shift();
       },
-      focus(lat, lon) {                     // spin the globe to face a point
-        state.rotY = -lon * DEG - Math.PI / 2;
+      focus(lat, lon) {
+        // After the Y rotation a point's depth is cos(lat)*sin(lon + rotY),
+        // which peaks when lon + rotY = pi/2 -- so rotY = pi/2 - lon. (An
+        // earlier sign slip here pointed the globe a quarter-turn away, at
+        // ~106E instead of New York.) The X rotation then centres it
+        // vertically at rotX = lat.
+        state.rotY = Math.PI / 2 - lon * DEG;
         state.rotX = Math.max(-1.2, Math.min(1.2, lat * DEG));
         state.autoSpin = false; state.resumeAt = performance.now() + 4000;
       },
       setPlacing(v) { state.placing = !!v; canvas.style.cursor = v ? "crosshair" : "grab"; },
+      setPins(list) { state.pins = (list || []).map(p => ({ ...p, vec: latLonToVec(p.lat, p.lon) })); },
+      setNight(v) { state.showNight = !!v; },
+      get nightOn() { return state.showNight; },
+      get sun() { return state.sunLL; },
       get arcCount() { return state.arcs.length; },
     };
   }

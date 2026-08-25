@@ -38,6 +38,7 @@ const STORE_PATH = path.join(DATA_DIR, "store.json");
 const MAX_EQUITY_POINTS = 3000;
 const MAX_TRADES = 500;
 const MAX_RESEARCH_HISTORY = 400; // rolling log of past research ticks, beyond just "latest scan"
+let lastHeldKey = null;           // held-position fingerprint; drives intel re-ranking (see /api/report)
 
 for (const [name, val] of Object.entries({ REPORT_TOKEN, DASHBOARD_USER, DASHBOARD_PASSWORD })) {
   if (!val) {
@@ -130,6 +131,18 @@ app.post("/api/report", (req, res) => {
   ].filter(Boolean));
   if (symbols.size) store.activeSymbols = Array.from(symbols).slice(0, 60);
   wsSyncSubscriptions();
+
+  // News relevance is scored against what's actually held, so a change in the
+  // book has to re-rank immediately -- otherwise a fresh position waits up to
+  // a minute before its currency's events get their exposure weighting. Keyed
+  // on the held set so the common case (unchanged positions, a report every
+  // few seconds) costs one string compare.
+  const heldKey = (store.latest.positions || []).map(p => p.symbol).sort().join(",");
+  if (heldKey !== lastHeldKey) {
+    lastHeldKey = heldKey;
+    refreshIntelCache();
+    if (intelCache) sseBroadcast("intel", intelCache);
+  }
 
   saveStore();
   // Push the fresh snapshot straight out to every open dashboard rather than
@@ -347,6 +360,7 @@ app.get("/api/stream", (req, res) => {
   // for the next report/tick.
   sseSend(client, "state", store);
   sseSend(client, "quotes", quotesPayload());
+  if (intelCache) sseSend(client, "intel", intelCache);
 
   const hb = setInterval(() => {
     try { res.write(": hb\n\n"); } catch { /* closed */ }
@@ -479,6 +493,30 @@ function buildDeskState() {
       time: t.t, symbol: t.symbol, direction: t.direction, status: t.status,
       quantity: t.quantity, entry: t.entry, stop: t.stop, target: t.target, reason: t.reason,
     })),
+    marketIntel: (() => {
+      const c = intelCache;
+      if (!c) return { available: false };
+      const fmtWhen = ms => {
+        const d = (ms - Date.now()) / 60000;
+        if (d >= 0) return d < 60 ? `in ${Math.round(d)}m` : `in ${(d/60).toFixed(1)}h`;
+        return -d < 60 ? `${Math.round(-d)}m ago` : `${(-d/60).toFixed(1)}h ago`;
+      };
+      return {
+        available: true,
+        nextHighImpactEvent: c.nextHigh ? {
+          title: c.nextHigh.title, currency: c.nextHigh.currency,
+          when: fmtWhen(c.nextHigh.at), forecast: c.nextHigh.forecast, previous: c.nextHigh.previous,
+        } : null,
+        upcomingEvents: c.events.filter(e => e.at >= Date.now()).slice(0, 10).map(e => ({
+          title: e.title, currency: e.currency, impact: e.impact, when: fmtWhen(e.at),
+          forecast: e.forecast, previous: e.previous, actual: e.actual,
+        })),
+        topHeadlines: c.news.slice(0, 12).map(n => ({
+          title: n.title, impact: n.impact, source: n.source,
+          when: fmtWhen(n.at), relevanceScore: n.score, about: n.related || null,
+        })),
+      };
+    })(),
   };
 }
 
@@ -532,6 +570,25 @@ function fridayFallback(question, d) {
       `• ${t.status} ${t.direction || ""} ${t.symbol} qty ${t.quantity ?? "?"} @ ${t.entry ?? "?"} (stop ${t.stop ?? "?"} / tgt ${t.target ?? "?"})`
     ).join("\n");
   }
+  if (has("news", "headline", "calendar", "event", "data release", "happening", "cpi", "fomc", "nfp", "payroll")) {
+    const mi = d.marketIntel || {};
+    if (!mi.available) return "The news feed hasn't loaded yet — give it a minute.";
+    const parts = [];
+    if (mi.nextHighImpactEvent) {
+      const e = mi.nextHighImpactEvent;
+      parts.push(`Next high-impact: ${e.currency} ${e.title} ${e.when}` +
+        (e.forecast ? ` (forecast ${e.forecast}, prev ${e.previous ?? "n/a"})` : ""));
+    }
+    if (mi.upcomingEvents?.length) {
+      parts.push("Coming up:\n" + mi.upcomingEvents.slice(0, 5).map(e =>
+        `• [${e.impact}] ${e.currency} ${e.title} — ${e.when}`).join("\n"));
+    }
+    if (mi.topHeadlines?.length) {
+      parts.push("Top headlines by relevance to your book:\n" + mi.topHeadlines.slice(0, 5).map(n =>
+        `• [${n.impact}] ${n.title}${n.about ? ` (${n.about})` : ""} — ${n.when}`).join("\n"));
+    }
+    return parts.join("\n\n") || "Nothing notable on the wire right now.";
+  }
   if (has("hi", "hey", "hello", "yo", "sup", "you there")) {
     return `Here. ${a.connected ? "Connected" : "Disconnected"}, ${d.positionCount} positions open, equity ${money(a.equity)}, unrealized ${money(a.unrealizedPnlLive)}. What do you want to know?`;
   }
@@ -549,6 +606,8 @@ Important context:
 - You describe and explain what the bot is doing. You do NOT give investment advice or opinions on whether something is a good trade. If asked for a market call or advice, say plainly that's not your job and redirect to what the bot is actually doing.
 - The strategy is a confluence-of-signals engine: several signals vote bull/bear/neutral per instrument, and a trade only fires when enough agree. Signals include market structure, support/resistance, candlestick patterns, volume, a trend filter, RSI momentum, and a long-term historical regime read.
 - Every entry goes out as a bracket order, so each position carries its own stop and target from the moment it opens.
+- The snapshot includes marketIntel: the economic calendar (Forex Factory High/Medium/Low impact grading) and ranked headlines. Relevance scores are computed against this desk's actual exposure, so a high-scoring item is one that touches a currency or symbol currently held. When asked about news or what's coming, lead with the highest-impact item that touches the book, and say plainly when something does NOT affect current positions.
+- The bot itself does NOT read news; it trades purely off price-action signals. If asked whether it will react to a headline, be clear that it won't - news context is for the owner's judgement, not an input to the strategy.
 
 If the owner asks you to DO something (pause scanning, resume, halt the bot, close a position, close everything, change risk %), do not claim you did it. Instead end your reply with a directive on its own final line, exactly:
 [[ACTION:pause_scanning]] or [[ACTION:resume_scanning]] or [[ACTION:halt]] or [[ACTION:close_all]] or [[ACTION:close_position:SYMBOL]] or [[ACTION:set_risk:NUMBER]]
@@ -601,6 +660,46 @@ app.post("/api/friday/chat", async (req, res) => {
 
 // Everything FRIDAY knows, also exposed directly (handy for debugging).
 app.get("/api/friday/state", (req, res) => res.json(buildDeskState()));
+
+// ===========================================================================
+// Market intelligence -- economic calendar + ranked news, scored against
+// this desk's real exposure. See market_intel.js.
+// ===========================================================================
+const { createMarketIntel } = require("./market_intel");
+const intel = createMarketIntel({
+  finnhub,
+  getActiveSymbols: () => store.activeSymbols || [],
+  getHeldSymbols: () => ((store.latest && store.latest.positions) || []).map(p => p.symbol),
+  log: console,
+});
+
+let intelCache = null;
+function refreshIntelCache() {
+  try { intelCache = intel.ranked(); } catch (e) { console.warn("intel rank failed:", e.message); }
+}
+async function intelCycle(which) {
+  try {
+    if (which === "calendar") await intel.refreshCalendar();
+    else if (which === "news") await intel.refreshNews();
+    else await intel.refreshAll();
+  } catch (e) { console.warn("intel refresh failed:", e.message); }
+  refreshIntelCache();
+  sseBroadcast("intel", intelCache);
+}
+// The calendar is a weekly file -- no point hammering it. News moves faster.
+setInterval(() => intelCycle("calendar"), 15 * 60_000);
+setInterval(() => intelCycle("news"), 3 * 60_000);
+// Re-rank on a shorter beat even without new data: scores are time-weighted,
+// so an event's urgency climbs as it approaches.
+setInterval(() => { refreshIntelCache(); sseBroadcast("intel", intelCache); }, 60_000);
+setTimeout(() => intelCycle("all"), 2500);
+
+app.get("/api/intel", (req, res) => {
+  if (!intelCache) refreshIntelCache();
+  res.json(intelCache || { top: [], events: [], news: [], pins: [], nextHigh: null, meta: {} });
+});
+app.get("/api/intel/diag", (req, res) => res.json(intel.diag()));
+app.post("/api/intel/refresh", async (req, res) => { await intelCycle("all"); res.json({ ok: true, meta: intelCache?.meta }); });
 
 // ---- Diagnostics ----------------------------------------------------------
 app.get("/api/diag", async (req, res) => {

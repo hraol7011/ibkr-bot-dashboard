@@ -204,6 +204,50 @@
 
   #footer { padding: 5px 18px; color: var(--dim2); font: 400 9.5px var(--mono); border-top: 1px solid var(--bd);
     display: flex; justify-content: space-between; flex-shrink: 0; }
+
+  /* ---------- high-impact alert strip ---------- */
+  #impactAlert { display: none; align-items: center; gap: 10px; padding: 5px 18px; flex-shrink: 0;
+    border-bottom: 1px solid #4a2323; background: linear-gradient(90deg, #22090b, #140a0c 60%, #0a0a0e);
+    font: 700 11px var(--mono); color: #ff9a96; }
+  #impactAlert.show { display: flex; }
+  #impactAlert.soon { animation: alertPulse 1.6s infinite; }
+  @keyframes alertPulse { 0%,100% { background-position: 0 0; box-shadow: inset 0 0 0 rgba(255,77,77,0); }
+                          50% { box-shadow: inset 0 0 40px rgba(255,77,77,.18); } }
+  #impactAlert .cd { color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .04em; }
+  #impactAlert .meta { color: var(--dim); font-weight: 400; }
+  #impactAlert .chip { background: rgba(255,77,77,.18); color: #ff6b66; padding: 1px 6px; border-radius: 2px; font-size: 9px; letter-spacing: .1em; }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 2px; }
+  .tab { background: transparent; border: none; color: var(--dim2); font: 800 9.5px var(--mono);
+    letter-spacing: .12em; padding: 3px 8px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab:hover { color: var(--dim); }
+  .tab.on { color: var(--cyn); border-bottom-color: var(--cyn); }
+  .tab .cnt { color: var(--dim2); font-weight: 400; }
+
+  /* ---------- news / calendar rows (Forex Factory style impact bars) ---------- */
+  .irow { display: flex; gap: 9px; align-items: flex-start; padding: 8px 10px; margin-bottom: 6px;
+    border: 1px solid var(--bd2); border-radius: 4px; background: var(--panel2); }
+  .irow.hot { border-color: #4a2323; background: linear-gradient(90deg, rgba(255,77,77,.08), var(--panel2) 60%); }
+  .irow.mine { box-shadow: inset 2px 0 0 var(--cyn); }
+  .imp { display: flex; flex-direction: column; gap: 1.5px; padding-top: 3px; flex-shrink: 0; width: 13px; }
+  .imp i { height: 3px; border-radius: 1px; background: var(--bd2); display: block; }
+  .imp.High i { background: #ff4d4d; }
+  .imp.Medium i:nth-child(-n+2) { background: #f0a93b; }
+  .imp.Low i:nth-child(1) { background: #7c8698; }
+  .imp.Holiday i { background: #3a4150; }
+  .irow .body { flex: 1; min-width: 0; }
+  .irow .ttl { font-size: 11.5px; font-weight: 600; line-height: 1.35; }
+  .irow .ttl a { color: inherit; text-decoration: none; }
+  .irow .ttl a:hover { color: var(--cyn); text-decoration: underline; }
+  .irow .sub { color: var(--dim); font: 400 9.5px var(--mono); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .irow .ccy { font-weight: 800; color: var(--txt); font-size: 9.5px; padding: 1px 4px; border-radius: 2px; background: rgba(63,200,255,.12); }
+  .irow .when { color: var(--dim2); font: 400 9.5px var(--mono); flex-shrink: 0; text-align: right; min-width: 52px; }
+  .irow .when.soon { color: #ff8b86; font-weight: 700; }
+  .irow .fig { color: var(--dim); font: 400 9px var(--mono); }
+  .irow .fig b { color: var(--txt); }
+  .irow .fig .act { color: var(--grn); }
+  .relscore { font: 700 8.5px var(--mono); color: var(--dim2); }
 </style>
 </head>
 <body>
@@ -231,6 +275,13 @@
     <span class="tag">LIVE EQUITY CURVE</span>
     <span class="lastval num" id="eqLastVal"></span>
     <div id="eqChart"></div>
+  </div>
+
+  <div id="impactAlert">
+    <span class="chip">HIGH IMPACT</span>
+    <span id="iaTitle"></span>
+    <span class="cd" id="iaCd">--:--</span>
+    <span class="meta" id="iaMeta"></span>
   </div>
 
   <div class="banner halt" id="killBanner">⛔ KILL-SWITCH ACTIVE — max drawdown tripped. No new trades until manual bot restart.</div>
@@ -272,18 +323,30 @@
           <canvas id="globeCanvas"></canvas>
           <div id="globeTools">
             <button class="btn cyn sm" id="btnSetLoc">📍 SET MY LOCATION</button>
+            <button class="btn sm" id="btnNight">🌓 DAY/NIGHT</button>
           </div>
           <div id="globeLegend">
             <span><i style="background:#f0a93b"></i>YOU</span>
             <span><i style="background:#1fdb85"></i>ACTIVE VENUE</span>
             <span><i style="background:#3fc8ff"></i>VENUE</span>
+            <span><i style="background:#ff4d4d"></i>HIGH-IMPACT NEWS</span>
+            <span><i style="background:#f0a93b"></i>MEDIUM</span>
           </div>
           <div id="globeHint">drag to spin · scroll to zoom · click a venue for detail</div>
         </div>
       </div>
-      <div class="col" style="flex:1">
-        <div class="hd"><span class="t"><span class="radar"></span>LIVE RESEARCH</span><span class="r" id="researchUpd">--</span></div>
+      <div class="col" style="flex:1.05">
+        <div class="hd">
+          <span class="tabs">
+            <button class="tab on" data-tab="research"><span class="radar" style="display:inline-block;vertical-align:-1px"></span> RESEARCH</button>
+            <button class="tab" data-tab="news">NEWS <span class="cnt" id="newsCnt"></span></button>
+            <button class="tab" data-tab="calendar">CALENDAR <span class="cnt" id="calCnt"></span></button>
+          </span>
+          <span class="r" id="researchUpd">--</span>
+        </div>
         <div class="bd" id="research"><div class="empty">Waiting for the bot's first scan…</div></div>
+        <div class="bd" id="newsPane" style="display:none"><div class="empty">Loading market news…</div></div>
+        <div class="bd" id="calPane" style="display:none"><div class="empty">Loading economic calendar…</div></div>
       </div>
     </div>
 
@@ -300,6 +363,8 @@
         <button data-q="how am I doing today?">P&amp;L</button>
         <button data-q="what are you thinking right now?">your read</button>
         <button data-q="why aren't you trading?">why no trades</button>
+        <button data-q="what news should I be watching right now?">news watch</button>
+        <button data-q="what high impact events are coming up and do they hit my positions?">upcoming risk</button>
       </div>
       <form id="chatForm">
         <textarea id="chatIn" rows="1" placeholder="Talk to FRIDAY…"></textarea>
@@ -797,6 +862,126 @@ function updateHeroPnl(stats) {
   bar.style.background = stats.wins >= stats.losses ? "var(--grn)" : "var(--red)";
 }
 
+/* ==================== market intelligence ==================== */
+let intel = null;
+
+// tab switching
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+  const t = b.dataset.tab;
+  $("research").style.display = t === "research" ? "" : "none";
+  $("newsPane").style.display = t === "news" ? "" : "none";
+  $("calPane").style.display  = t === "calendar" ? "" : "none";
+});
+
+const relWhen = ms => {
+  const d = (ms - Date.now()) / 60000;
+  if (d >= 0) return d < 1 ? "now" : d < 60 ? `in ${Math.round(d)}m` : d < 1440 ? `in ${(d/60).toFixed(1)}h` : `in ${Math.round(d/1440)}d`;
+  const a = -d;
+  return a < 60 ? `${Math.round(a)}m ago` : a < 1440 ? `${(a/60).toFixed(1)}h ago` : `${Math.round(a/1440)}d ago`;
+};
+const impBars = imp => `<span class="imp ${imp}"><i></i><i></i><i></i></span>`;
+
+// Which currencies this desk is actually exposed to right now -- drives the
+// "mine" highlight so relevant items are obvious at a glance.
+function exposedCurrencies() {
+  const out = new Set();
+  for (const p of lastPositions) {
+    if (p.symbol.includes(".")) p.symbol.split(".").slice(0,2).forEach(c => out.add(c));
+    else out.add("USD");
+  }
+  return out;
+}
+const heldSymbols = () => new Set(lastPositions.map(p => p.symbol));
+
+function rowHtml(i, opts = {}) {
+  const mine = (i.currency && i.currency !== "ALL" && exposedCurrencies().has(i.currency))
+            || (i.related && heldSymbols().has(i.related));
+  const soon = i.kind === "event" && i.at >= Date.now() && (i.at - Date.now()) < 60*60000;
+  const hot = i.impact === "High" && (mine || soon);
+  const figs = [];
+  if (i.actual != null && i.actual !== "") figs.push(`<span class="fig">actual <b class="act">${esc(i.actual)}</b></span>`);
+  if (i.forecast) figs.push(`<span class="fig">fcst <b>${esc(i.forecast)}</b></span>`);
+  if (i.previous) figs.push(`<span class="fig">prev <b>${esc(i.previous)}</b></span>`);
+  const title = i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a>` : esc(i.title);
+  return `<div class="irow ${hot ? "hot" : ""} ${mine ? "mine" : ""}">` +
+    impBars(i.impact) +
+    `<div class="body"><div class="ttl">${title}</div>` +
+    `<div class="sub">` +
+      (i.currency && i.currency !== "ALL" ? `<span class="ccy">${esc(i.currency)}</span>` : "") +
+      (i.source ? `<span>${esc(i.source)}</span>` : "") +
+      (i.related ? `<span>${esc(i.related)}</span>` : "") +
+      figs.join("") +
+      (opts.showScore && i.score != null ? `<span class="relscore">rel ${i.score}</span>` : "") +
+    `</div></div>` +
+    `<span class="when ${soon ? "soon" : ""}">${relWhen(i.at)}</span></div>`;
+}
+
+function renderIntel() {
+  if (!intel) return;
+  // NEWS tab: ranked by relevance to this book, not just recency
+  const news = intel.news || [];
+  $("newsCnt").textContent = news.length ? `(${news.length})` : "";
+  $("newsPane").innerHTML = news.length
+    ? news.map(n => rowHtml(n, { showScore: true })).join("")
+    : `<div class="empty">No headlines yet.${intel.meta?.errors?.news ? "<br>feed: " + esc(intel.meta.errors.news) : ""}</div>`;
+
+  // CALENDAR tab: chronological, Forex Factory style
+  const ev = intel.events || [];
+  $("calCnt").textContent = ev.length ? `(${ev.length})` : "";
+  const now = Date.now();
+  const upcoming = ev.filter(e => e.at >= now), past = ev.filter(e => e.at < now).slice(-8).reverse();
+  $("calPane").innerHTML = ev.length
+    ? (upcoming.length ? `<div style="color:var(--dim2);font:700 8.5px var(--mono);letter-spacing:.14em;margin:2px 0 6px">UPCOMING</div>` + upcoming.map(e => rowHtml(e)).join("") : "") +
+      (past.length ? `<div style="color:var(--dim2);font:700 8.5px var(--mono);letter-spacing:.14em;margin:10px 0 6px">JUST RELEASED</div>` + past.map(e => rowHtml(e)).join("") : "")
+    : `<div class="empty">Economic calendar unavailable.${intel.meta?.errors?.calendar ? "<br>" + esc(intel.meta.errors.calendar) : ""}</div>`;
+
+  // globe pins
+  globe.setPins((intel.pins || []).map(p => ({ lat: p.lat, lon: p.lon, impact: p.impact, title: p.title,
+    city: p.city, currency: p.currency, at: p.at, kind: p.kind, score: p.score })));
+
+  renderImpactAlert();
+}
+
+// Live countdown to the next high-impact release. This is the single most
+// useful thing on the screen for a discretionary eye on an automated book.
+function renderImpactAlert() {
+  const el = $("impactAlert");
+  const e = intel && intel.nextHigh;
+  if (!e) { el.classList.remove("show", "soon"); return; }
+  const ms = e.at - Date.now();
+  if (ms < -15 * 60000) { el.classList.remove("show", "soon"); return; }   // stale
+  el.classList.add("show");
+  el.classList.toggle("soon", ms > 0 && ms < 30 * 60000);
+  const exposed = exposedCurrencies().has(e.currency);
+  $("iaTitle").innerHTML = `${esc(e.currency)} · ${esc(e.title)}` +
+    (exposed ? ` <span style="color:var(--cyn)">— you're exposed</span>` : "");
+  if (ms <= 0) {
+    $("iaCd").textContent = "RELEASED";
+  } else {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    $("iaCd").textContent = (h ? String(h).padStart(2, "0") + ":" : "") +
+      String(m).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
+  }
+  const bits = [];
+  if (e.forecast) bits.push("forecast " + e.forecast);
+  if (e.previous) bits.push("prev " + e.previous);
+  $("iaMeta").textContent = bits.join(" · ");
+}
+setInterval(renderImpactAlert, 1000);   // tick the countdown independently of data
+
+async function pollIntel() {
+  try { const r = await fetch("/api/intel"); if (r.ok) { intel = await r.json(); renderIntel(); } } catch {}
+}
+
+// clicking a globe pin explains it in FRIDAY's thread
+globe.on("pinclick", p => {
+  narrate(`${p.city} (${p.currency}) — [${p.impact}] ${p.title} · ${relWhen(p.at)}`,
+    p.impact === "High" ? "warn" : null);
+});
+$("btnNight").onclick = () => { globe.setNight(!globe.nightOn); };
+
 /* ---------------- state plumbing ---------------- */
 let lastPositions = [], lastRecentTrades = [];
 function applyState(state) {
@@ -865,9 +1050,30 @@ function connectStream() {
   let es; try { es = new EventSource("/api/stream"); } catch { startPolling(); return; }
   es.addEventListener("state",  e => { streamLive = true; stopPolling(); try { applyState(JSON.parse(e.data)); } catch {} });
   es.addEventListener("quotes", e => { streamLive = true; stopPolling(); try { applyQuotes(JSON.parse(e.data)); } catch {} });
+  es.addEventListener("intel",  e => { try { intel = JSON.parse(e.data); renderIntel(); } catch {} });
   es.onerror = () => { streamLive = false; startPolling(); };
 }
-pollState(); pollQuotes(); connectStream(); startPolling();
+pollState(); pollQuotes(); pollIntel(); connectStream(); startPolling();
+// Intel arrives over the stream; this is just a slow safety net in case the
+// stream is unavailable and we're in polling mode.
+setInterval(() => { if (!streamLive) pollIntel(); }, 90_000);
+
+// Alert the desk once when a high-impact release on an exposed currency is
+// about to land -- the one moment an automated book most deserves a human eye.
+let alertedFor = null;
+setInterval(() => {
+  const e = intel && intel.nextHigh;
+  if (!e) return;
+  const mins = (e.at - Date.now()) / 60000;
+  const key = e.title + e.at;
+  if (mins > 0 && mins <= 15 && alertedFor !== key) {
+    alertedFor = key;
+    const exposed = exposedCurrencies().has(e.currency);
+    narrate(`⚠ ${e.currency} ${e.title} drops in ${Math.round(mins)} minutes` +
+      (exposed ? ` — you're holding ${e.currency} exposure. Expect a spread widen and a volatility spike.` : " — no direct exposure in the book."),
+      exposed ? "warn" : null);
+  }
+}, 20_000);
 </script>
 </body>
 </html>
