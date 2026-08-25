@@ -111,7 +111,33 @@
   .tag.fx { color: var(--amb2); } .tag.stk { color: var(--cyn); } .tag.cr { color: #c886ff; }
   .empty { color: var(--dim); padding: 8px; font-size: 10.5px; }
 
+  /* LIVE screen -- big animated buy/sell feed + position cards */
+  #liveFeed { display: flex; flex-direction: column; gap: 7px; padding: 8px; }
+  .lcard { border: 1px solid var(--bd2); border-left: 5px solid var(--dim2); background: var(--panel2); padding: 9px 12px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .lcard.buy { border-left-color: var(--grn); }
+  .lcard.sell { border-left-color: var(--red); }
+  .lcard .lside { font-size: 15px; font-weight: 800; letter-spacing: .06em; min-width: 52px; }
+  .lcard.buy .lside { color: var(--grn); } .lcard.sell .lside { color: var(--red); }
+  .lcard .lsym { font-size: 20px; font-weight: 800; color: #fff; min-width: 110px; }
+  .lcard .lmeta { color: var(--dim); font-size: 11px; flex: 1; min-width: 160px; }
+  .lcard .lpx { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lcard .ltime { color: var(--dim2); font-size: 9.5px; white-space: nowrap; }
+  .lcard.lnew { animation: lcardIn .9s ease-out; }
+  @keyframes lcardIn { 0% { transform: translateX(24px) scale(.98); opacity: 0; background: rgba(251,139,30,.30); } 60% { opacity: 1; } 100% { transform: none; background: var(--panel2); } }
+  #livePositions { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+  .pcard { border: 1px solid var(--bd2); background: var(--panel2); padding: 10px 12px; }
+  .pcard .prow1 { display: flex; justify-content: space-between; align-items: baseline; }
+  .pcard .psym { font-size: 18px; font-weight: 800; color: #fff; }
+  .pcard .pdir { font-size: 10px; font-weight: 700; letter-spacing: .08em; margin-left: 8px; }
+  .pcard .pdir.long { color: var(--grn); } .pcard .pdir.short { color: var(--red); }
+  .pcard .ppnl { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .pcard .prow2 { display: flex; justify-content: space-between; color: var(--dim); font-size: 10px; margin-top: 4px; }
+  .pcard.flashu { animation: flashUp 1.1s; } .pcard.flashd { animation: flashDown 1.1s; }
+  @keyframes flashUp { 0% { background: rgba(0,210,106,.32); } 100% { background: var(--panel2); } }
+  @keyframes flashDown { 0% { background: rgba(255,67,61,.32); } 100% { background: var(--panel2); } }
+
   /* grids per screen */
+  .g-live { grid-template-columns: 1fr 1.3fr; gap: 6px; height: 100%; }
   .g-wei { grid-template-columns: 1.05fr 1.15fr 1fr; grid-template-rows: 1fr 1fr; gap: 6px; height: 100%; }
   .g-gp { grid-template-columns: 1fr 250px; grid-template-rows: auto 1fr; gap: 6px; height: 100%; }
   .g-des { grid-template-columns: 1.1fr 1fr 1fr; grid-template-rows: auto 1fr 1fr; gap: 6px; height: 100%; }
@@ -199,7 +225,7 @@
   <div id="logo">FRIDAY<span style="font-size:8px; letter-spacing:.2em;">TERMINAL</span></div>
   <input id="cmd" placeholder="Enter ticker or function  —  AAPL · EURUSD · BTC · WTI · GP · DES · N · PORT   then <GO>" autocomplete="off" spellcheck="false">
   <button id="go">GO</button>
-  <div id="cmdhint">F: WEI GP DES N ECO GLOBE PORT DIAG</div>
+  <div id="cmdhint">F: LIVE WEI GP DES N ECO GLOBE PORT DIAG</div>
 </div>
 
 <div id="status">
@@ -230,20 +256,29 @@
 <div id="frame">
   <div id="side">
     <div id="menu">
-      <div class="mi" data-scr="wei"><span class="n">1)</span>WEI<span class="k">world markets</span></div>
-      <div class="mi" data-scr="gp"><span class="n">2)</span>GP<span class="k">chart</span></div>
-      <div class="mi" data-scr="des"><span class="n">3)</span>DES<span class="k">analysis</span></div>
-      <div class="mi" data-scr="n"><span class="n">4)</span>N<span class="k">news + tv</span></div>
-      <div class="mi" data-scr="eco"><span class="n">5)</span>ECO<span class="k">calendar</span></div>
-      <div class="mi" data-scr="globe"><span class="n">6)</span>GLOBE<span class="k">world map</span></div>
-      <div class="mi" data-scr="port"><span class="n">7)</span>PORT<span class="k">bot command</span></div>
-      <div class="mi" data-scr="diag"><span class="n">8)</span>DIAG<span class="k">data health</span></div>
+      <div class="mi" data-scr="live"><span class="n">1)</span>LIVE<span class="k">trade feed</span></div>
+      <div class="mi" data-scr="wei"><span class="n">2)</span>WEI<span class="k">world markets</span></div>
+      <div class="mi" data-scr="gp"><span class="n">3)</span>GP<span class="k">chart</span></div>
+      <div class="mi" data-scr="des"><span class="n">4)</span>DES<span class="k">analysis</span></div>
+      <div class="mi" data-scr="n"><span class="n">5)</span>N<span class="k">news + tv</span></div>
+      <div class="mi" data-scr="eco"><span class="n">6)</span>ECO<span class="k">calendar</span></div>
+      <div class="mi" data-scr="globe"><span class="n">7)</span>GLOBE<span class="k">world map</span></div>
+      <div class="mi" data-scr="port"><span class="n">8)</span>PORT<span class="k">bot command</span></div>
+      <div class="mi" data-scr="diag"><span class="n">9)</span>DIAG<span class="k">data health</span></div>
     </div>
     <div id="sideList"></div>
   </div>
 
   <div id="work">
     <!-- WEI -->
+    <!-- LIVE: nothing but the bot's own buys/sells, animated as they happen -->
+    <div class="screen g-live" id="scr-live">
+      <div class="pn"><div class="hd">OPEN POSITIONS<span class="r" id="liveConn">--</span></div>
+        <div class="bd"><div id="livePositions"><div class="empty">No open positions.</div></div></div></div>
+      <div class="pn"><div class="hd">LIVE BUY / SELL FEED<span class="r" id="liveFeedUpd"></span></div>
+        <div class="bd"><div id="liveFeed"><div class="empty">Waiting for bot activity…</div></div></div></div>
+    </div>
+
     <div class="screen g-wei" id="scr-wei">
       <div class="pn" style="grid-row: span 2;"><div class="hd">WORLD MARKETS<span class="r" id="weiUpd"></span></div><div class="bd" id="weiTables"></div></div>
       <div class="pn"><div class="hd">GLOBAL MAP</div><div class="bd" style="overflow:hidden" id="weiGlobeSlot"></div></div>
@@ -392,7 +427,7 @@ const ALL_IDS = Object.values(GROUPS).flat().map(x => x[0]);
 const ID2NAME = Object.fromEntries(Object.values(GROUPS).flat());
 const FX_BOT = Object.fromEntries(GROUPS.FX.map(([id]) => [id, id.slice(0, 3) + "." + id.slice(3)]));
 const BOT_IDS = { ...Object.fromEntries(GROUPS.STOCKS.map(s => [s[0], s[0]])), ...FX_BOT };
-const FUNCS = ["WEI","GP","DES","N","ECO","GLOBE","PORT","DIAG"];
+const FUNCS = ["LIVE","WEI","GP","DES","N","ECO","GLOBE","PORT","DIAG"];
 
 let quotes = {}, prevPx = {}, botState = null, selId = "AAPL", selRange = "1d";
 let lastInstrument = null;
@@ -907,6 +942,64 @@ initGlobe();
 let botEvents = [];
 const seenTrades = new Set();
 let firstState = true;
+const prevPosPnl = {}; // symbol -> last unrealizedPnl seen, for the LIVE screen's flash-on-change position cards
+
+/* ---------------- LIVE: big animated buy/sell feed + position cards ---------------- */
+function renderLivePositions(positions) {
+  const host = $("livePositions");
+  if (!host) return;
+  if (!positions.length) { host.innerHTML = '<div class="empty">No open positions.</div>'; return; }
+  const seenSyms = new Set();
+  host.innerHTML = positions.map(p => {
+    seenSyms.add(p.symbol);
+    const isFx = p.secType === "CASH";
+    const d2 = isFx ? (p.symbol?.endsWith(".JPY") ? 3 : 5) : 2;
+    const fn = v => (typeof v === "number" && isFinite(v)) ? v.toFixed(d2) : "--";
+    const pnl = p.unrealizedPnl;
+    const prev = prevPosPnl[p.symbol];
+    const flash = typeof prev === "number" && typeof pnl === "number" && pnl !== prev ? (pnl > prev ? "flashu" : "flashd") : "";
+    prevPosPnl[p.symbol] = pnl;
+    return `<div class="pcard ${flash}">` +
+      `<div class="prow1"><span><span class="psym">${p.display || p.symbol}</span>` +
+      `<span class="pdir ${p.quantity >= 0 ? "long" : "short"}">${p.quantity >= 0 ? "LONG" : "SHORT"} ${Math.abs(p.quantity).toLocaleString()}</span></span>` +
+      `<span class="ppnl ${cls(pnl)}">${typeof pnl === "number" ? sgn(pnl) + fmtM(Math.abs(pnl)) : "--"}</span></div>` +
+      `<div class="prow2"><span>AVG ${fn(p.avgCost)}</span><span>LAST ${fn(p.marketPrice)}</span>` +
+      `<span><button class="btn sm danger" data-lsym="${p.symbol}">CLOSE</button></span></div></div>`;
+  }).join("");
+  for (const sym of Object.keys(prevPosPnl)) if (!seenSyms.has(sym)) delete prevPosPnl[sym];
+  host.querySelectorAll("button[data-lsym]").forEach(b => b.onclick = () => {
+    if (confirm(`Close position ${b.dataset.lsym} at market?`)) sendCommand("close_position", { symbol: b.dataset.lsym }, "CLOSE " + b.dataset.lsym);
+  });
+}
+// {key, html} cache, newest-first. html never bakes in the "lnew" class --
+// that's applied only at render time for keys still in pendingNewKeys, so a
+// card's slide-in animation plays once (the poll it arrives on) instead of
+// replaying every poll just because we redraw the whole list from cache.
+let liveFeedEntries = [];
+const pendingNewKeys = new Set();
+function pushLiveFeedCard(t, key, prepend = true) {
+  const dir = String(t.direction || "").toUpperCase();
+  const isBuy = dir.includes("BUY") || dir.includes("LONG");
+  const isSell = dir.includes("SELL") || dir.includes("SHORT");
+  const sideClass = isBuy ? "buy" : isSell ? "sell" : "";
+  const html = `<div class="lcard ${sideClass}" data-key="${key}">` +
+    `<span class="lside">${dir || (t.status || "").toUpperCase()}</span>` +
+    `<span class="lsym">${t.display || t.symbol || ""}</span>` +
+    `<span class="lmeta">${t.status === "opened" ? `qty ${t.quantity ?? "--"} @ ${t.entry ?? "--"} · stop ${t.stop ?? "--"} / tgt ${t.target ?? "--"}` : (t.reason || t.status || "")}</span>` +
+    `<span class="lpx">${t.entry != null ? fmtP(Number(t.entry)) : ""}</span>` +
+    `<span class="ltime">${tShort(t.t)}</span></div>`;
+  if (prepend) liveFeedEntries.unshift({ key, html }); else liveFeedEntries.push({ key, html });
+  liveFeedEntries = liveFeedEntries.slice(0, 60);
+}
+function renderLiveFeed() {
+  const host = $("liveFeed");
+  if (!host) return;
+  host.innerHTML = liveFeedEntries.length
+    ? liveFeedEntries.map(e => pendingNewKeys.has(e.key) ? e.html.replace('class="lcard', 'class="lcard lnew') : e.html).join("")
+    : '<div class="empty">Waiting for bot activity…</div>';
+  pendingNewKeys.clear();
+  $("liveFeedUpd").textContent = liveFeedEntries.length ? "updated just now" : "";
+}
 function pop(t) {
   const card = document.createElement("div");
   card.className = "pop " + (t.status || "");
@@ -1060,6 +1153,8 @@ async function pollState() {
     tb.querySelectorAll("button[data-sym]").forEach(b => b.onclick = () => {
       if (confirm(`Close position ${b.dataset.sym} at market?`)) sendCommand("close_position", { symbol: b.dataset.sym }, "CLOSE " + b.dataset.sym);
     });
+    renderLivePositions(l.positions || []);
+    const lc = $("liveConn"); if (lc) lc.innerHTML = l.connected ? '<span class="up">LIVE</span>' : '<span class="down">DOWN</span>';
   }
   try { renderEquity(state.equityHistory); renderPnl(state.equityHistory); } catch {}
 
@@ -1078,6 +1173,10 @@ async function pollState() {
         botEvents.unshift(`${(t.status || "").toUpperCase()} ${t.display || t.symbol} @${t.entry || ""}`);
         botEvents = botEvents.slice(0, 8);
         renderTape();
+        pushLiveFeedCard(t, key, true);
+        pendingNewKeys.add(key);
+      } else if (firstState) {
+        pushLiveFeedCard(t, key, false);
       }
     }
     const tr = document.createElement("tr");
@@ -1092,6 +1191,7 @@ async function pollState() {
     db.appendChild(tr);
   }
   firstState = false;
+  renderLiveFeed();
   $("logTail").textContent = (state.logTail || []).length ? state.logTail.join("\n") : "No log lines yet.";
   const lt = $("logTail").parentElement; lt.scrollTop = lt.scrollHeight;
   renderGpHead();
@@ -1117,7 +1217,7 @@ async function loadDiag() {
 }
 
 /* ---------------- boot ---------------- */
-const initial = (location.hash || "#wei").slice(1);
+const initial = (location.hash || "#live").slice(1);
 showScreen(FUNCS.map(f => f.toLowerCase()).includes(initial) ? initial : "wei");
 renderSide();
 </script>
