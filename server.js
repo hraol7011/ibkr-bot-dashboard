@@ -181,6 +181,7 @@ app.get("/api/news", (req, res) => {
 const YF_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
   "Accept": "application/json,text/html,*/*",
+  "Accept-Language": "en-US,en;q=0.9",
 };
 const quoteCache = new Map();   // symbol -> {ts, data}
 const chartCache = new Map();   // symbol|range -> {ts, data}
@@ -189,15 +190,71 @@ const QUOTE_TTL = 8_000, CHART_TTL = 30_000, FUND_TTL = 6 * 3600_000;
 
 const SYMBOL_RE = /^[A-Za-z0-9^.\-=]{1,12}$/;
 
+// Yahoo increasingly rejects bare requests from datacenter IPs (401/403/429)
+// unless they carry a session cookie (+ crumb for some endpoints). We do the
+// cookie handshake once, reuse it everywhere, refresh it when a request gets
+// bounced, and fall back between query1/query2 hosts. Failures are logged
+// (throttled) so Render's log view shows WHY quotes are empty, not just that
+// they are.
+let yfAuth = { cookie: null, crumb: null, ts: 0 };
+let lastYfErrLog = 0;
+function logYfError(msg) {
+  if (Date.now() - lastYfErrLog > 60_000) {
+    lastYfErrLog = Date.now();
+    console.error("[yahoo]", msg);
+  }
+}
+async function getYfAuth(force = false) {
+  if (!force && yfAuth.cookie && Date.now() - yfAuth.ts < 4 * 3600_000) return yfAuth;
+  const r1 = await fetch("https://fc.yahoo.com/", { headers: YF_HEADERS, redirect: "manual", signal: AbortSignal.timeout(7000) }).catch(() => null);
+  let cookie = "";
+  if (r1) {
+    const sc = (typeof r1.headers.getSetCookie === "function") ? r1.headers.getSetCookie() : [r1.headers.get("set-cookie")].filter(Boolean);
+    cookie = sc.map(c => String(c).split(";")[0]).join("; ");
+  }
+  if (!cookie) throw new Error("no yahoo cookie");
+  let crumb = null;
+  try {
+    const r2 = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+      headers: { ...YF_HEADERS, Cookie: cookie }, signal: AbortSignal.timeout(7000) });
+    const t = (await r2.text()).trim();
+    if (r2.ok && t && !t.includes("<")) crumb = t;
+  } catch {}
+  yfAuth = { cookie, crumb, ts: Date.now() };
+  return yfAuth;
+}
+
 async function yfChart(symbol, range, interval) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+  const path = `/v8/finance/chart/${encodeURIComponent(symbol)}` +
     `?range=${range}&interval=${interval}&includePrePost=false&events=div%2Csplit`;
-  const r = await fetch(url, { headers: YF_HEADERS, signal: AbortSignal.timeout(7000) });
-  if (!r.ok) throw new Error(`yahoo chart ${symbol}: HTTP ${r.status}`);
-  const j = await r.json();
-  const result = j?.chart?.result?.[0];
-  if (!result) throw new Error(`yahoo chart ${symbol}: empty result`);
-  return result;
+  let auth = null;
+  try { auth = await getYfAuth(); } catch {}
+  let lastErr = null;
+  for (const attempt of [0, 1, 2]) {
+    const host = attempt === 1 ? "query2.finance.yahoo.com" : "query1.finance.yahoo.com";
+    const headers = { ...YF_HEADERS };
+    if (auth?.cookie) headers.Cookie = auth.cookie;
+    let url = `https://${host}${path}`;
+    if (auth?.crumb) url += `&crumb=${encodeURIComponent(auth.crumb)}`;
+    try {
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(7000) });
+      if (r.status === 401 || r.status === 403 || r.status === 429) {
+        lastErr = new Error(`yahoo chart ${symbol}: HTTP ${r.status}`);
+        if (attempt < 2) { try { auth = await getYfAuth(true); } catch {} continue; }
+        throw lastErr;
+      }
+      if (!r.ok) throw new Error(`yahoo chart ${symbol}: HTTP ${r.status}`);
+      const j = await r.json();
+      const result = j?.chart?.result?.[0];
+      if (!result) throw new Error(`yahoo chart ${symbol}: empty result`);
+      return result;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 2) break;
+    }
+  }
+  logYfError(String(lastErr?.message || lastErr));
+  throw lastErr;
 }
 
 function shapeQuote(result) {
@@ -271,26 +328,8 @@ app.get("/api/chart", async (req, res) => {
   }
 });
 
-// --- Fundamentals need Yahoo's cookie+crumb dance. Fail soft: the panel
-// just shows fewer rows if Yahoo changes the handshake again.
-let yfAuth = { cookie: null, crumb: null, ts: 0 };
-async function getYfAuth() {
-  if (yfAuth.crumb && Date.now() - yfAuth.ts < 4 * 3600_000) return yfAuth;
-  const r1 = await fetch("https://fc.yahoo.com/", { headers: YF_HEADERS, redirect: "manual", signal: AbortSignal.timeout(7000) }).catch(() => null);
-  let cookie = "";
-  if (r1) {
-    const sc = (typeof r1.headers.getSetCookie === "function") ? r1.headers.getSetCookie() : [r1.headers.get("set-cookie")].filter(Boolean);
-    cookie = sc.map(c => String(c).split(";")[0]).join("; ");
-  }
-  if (!cookie) throw new Error("no yahoo cookie");
-  const r2 = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
-    headers: { ...YF_HEADERS, Cookie: cookie }, signal: AbortSignal.timeout(7000) });
-  const crumb = (await r2.text()).trim();
-  if (!r2.ok || !crumb || crumb.includes("<")) throw new Error("no yahoo crumb");
-  yfAuth = { cookie, crumb, ts: Date.now() };
-  return yfAuth;
-}
-
+// --- Fundamentals reuse the same cookie+crumb session as yfChart. Fail
+// soft: the panel just shows fewer rows if Yahoo changes the handshake.
 const num = (x) => (x && typeof x === "object" ? x.raw : x);
 app.get("/api/fundamentals", async (req, res) => {
   const symbol = String(req.query.symbol || "");
@@ -299,6 +338,7 @@ app.get("/api/fundamentals", async (req, res) => {
   if (hit && Date.now() - hit.ts < FUND_TTL) return res.json(hit.data);
   try {
     const { cookie, crumb } = await getYfAuth();
+    if (!crumb) throw new Error("no yahoo crumb available");
     const modules = "price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,calendarEvents";
     const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}` +
       `?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;

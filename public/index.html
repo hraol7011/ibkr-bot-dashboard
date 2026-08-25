@@ -244,9 +244,11 @@
       <h2><span class="live"></span>Live Market TV</h2>
       <div class="frame"><iframe id="tvFrame" src="" title="Live market TV" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy" referrerpolicy="origin"></iframe></div>
       <div class="tvsrc">
-        <button data-ch="UCIALMKvObZNtJ6AmdCLP7Lg" class="on">BLOOMBERG TV</button>
-        <button data-ch="UCEAZeUIeJs0IjQiqTCdVSIg">YAHOO FINANCE</button>
+        <button data-vid="QB5BNdBFujE" class="on">BLOOMBERG BUSINESS</button>
+        <button data-vid="aiQJKBvXjDk">BLOOMBERG 24/7</button>
+        <button data-vid="KQp-e_XQnDE">YAHOO FINANCE</button>
       </div>
+      <div style="margin-top:6px; font-size:9px; color:var(--muted2);">Stream not playing? <a id="tvLink" href="#" target="_blank" rel="noopener">Open it on YouTube</a> — some live streams block embedding.</div>
     </section>
 
     <section class="panel">
@@ -533,14 +535,15 @@ function renderTicker() {
 }
 
 /* ---------------- Live TV ---------------- */
-function setTv(channelId) {
-  $("tvFrame").src = `https://www.youtube.com/embed/live_stream?channel=${channelId}&autoplay=0`;
+function setTv(videoId) {
+  $("tvFrame").src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=0&rel=0`;
+  $("tvLink").href = `https://www.youtube.com/watch?v=${videoId}`;
 }
 document.querySelectorAll(".tvsrc button").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tvsrc button").forEach(x => x.classList.remove("on"));
-  b.classList.add("on"); setTv(b.dataset.ch);
+  b.classList.add("on"); setTv(b.dataset.vid);
 });
-setTv("UCIALMKvObZNtJ6AmdCLP7Lg");
+setTv("QB5BNdBFujE");
 
 /* ---------------- News ---------------- */
 async function pollNews() {
